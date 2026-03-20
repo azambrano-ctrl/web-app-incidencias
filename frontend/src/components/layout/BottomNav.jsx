@@ -1,10 +1,14 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useNavigate } from 'react-router-dom';
 
 export default function BottomNav() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { unreadCount } = useNotificationStore();
+  const navigate = useNavigate();
+
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   const links = [
     { to: '/', label: 'Dashboard', icon: '📊', roles: ['admin', 'supervisor', 'technician'] },
@@ -27,6 +31,10 @@ export default function BottomNav() {
             <span>{l.label}</span>
           </NavLink>
         ))}
+        <button className="bottom-nav-link" onClick={handleLogout}>
+          <span className="nav-icon">🚪</span>
+          <span>Salir</span>
+        </button>
         {/* Notificaciones en bottom nav */}
         <button className="bottom-nav-link" style={{ position: 'relative' }}
           onClick={() => document.querySelector('.bell-btn')?.click()}>
