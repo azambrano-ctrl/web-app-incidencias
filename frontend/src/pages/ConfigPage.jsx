@@ -40,6 +40,8 @@ export default function ConfigPage() {
     whatsapp_enabled: '0', whatsapp_api_url: '', whatsapp_token: '', whatsapp_body_template: DEFAULT_WA_TEMPLATE,
   });
   const [pushCfg, setPushCfg] = useState({ push_enabled: '0' });
+  const [extCfg, setExtCfg] = useState({ ext_api_enabled: '0', ext_api_url: '', ext_api_user: '', ext_api_pass: '' });
+  const [savingExt, setSavingExt] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testWaTo, setTestWaTo] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
@@ -66,6 +68,7 @@ export default function ConfigPage() {
       setEmailCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('email_'))) }));
       setWaCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('whatsapp_'))) }));
       setPushCfg(prev => ({ ...prev, push_enabled: s.push_enabled || '0' }));
+      setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
     },
   });
 
@@ -83,6 +86,7 @@ export default function ConfigPage() {
   const setTF = (k, v) => setTechForm(f => ({ ...f, [k]: v }));
   const setEC = (k, v) => setEmailCfg(f => ({ ...f, [k]: v }));
   const setWA = (k, v) => setWaCfg(f => ({ ...f, [k]: v }));
+  const setExt = (k, v) => setExtCfg(f => ({ ...f, [k]: v }));
 
   const openCreate = () => { setTechForm(EMPTY_TECH); setEditingTech(null); setShowTechForm(true); };
   const openEdit = (t) => { setTechForm({ ...t, password: '' }); setEditingTech(t); setShowTechForm(true); };
@@ -108,6 +112,16 @@ export default function ConfigPage() {
     onSuccess: () => { toast.success('Contraseña restablecida'); setResetId(null); setNewPass(''); },
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
+
+  // ── Guardar API externa ──
+  const handleSaveExt = async () => {
+    setSavingExt(true);
+    try {
+      await saveSettings(extCfg);
+      toast.success('API externa guardada');
+    } catch { toast.error('Error al guardar'); }
+    finally { setSavingExt(false); }
+  };
 
   // ── Guardar ajustes de notificaciones ──
   const handleSaveNotif = async () => {
@@ -462,6 +476,43 @@ export default function ConfigPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── API EXTERNA ── */}
+          {user?.role === 'admin' && (
+            <div className="card">
+              <h3>🔗 API Externa (Sistema externo)</h3>
+              <p style={{ color: '#64748b', marginBottom: 16 }}>
+                Cuando se crea una incidencia en este sistema, se enviará automáticamente al sistema externo configurado.
+              </p>
+              <div style={{ marginBottom: 16 }}>
+                <label className="toggle-label">
+                  <input type="checkbox" checked={extCfg.ext_api_enabled === '1'}
+                    onChange={e => setExt('ext_api_enabled', e.target.checked ? '1' : '0')} />
+                  <span className="toggle-slider" />
+                  Activar integración con API externa
+                </label>
+              </div>
+              <div className="notif-grid">
+                <label>URL base del sistema externo
+                  <input value={extCfg.ext_api_url} onChange={e => setExt('ext_api_url', e.target.value)}
+                    placeholder="http://3.220.31.246:5000" />
+                </label>
+                <label>Usuario (email)
+                  <input value={extCfg.ext_api_user} onChange={e => setExt('ext_api_user', e.target.value)}
+                    placeholder="troncalnet@lsfcloud.com" />
+                </label>
+                <label>Contraseña
+                  <input type="password" value={extCfg.ext_api_pass} onChange={e => setExt('ext_api_pass', e.target.value)}
+                    placeholder="••••••••" />
+                </label>
+              </div>
+              <div className="notif-actions" style={{ marginTop: 16 }}>
+                <button className="btn btn-primary" onClick={handleSaveExt} disabled={savingExt}>
+                  {savingExt ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
             </div>
           )}
 

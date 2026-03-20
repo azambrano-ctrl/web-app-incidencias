@@ -3,6 +3,7 @@ const { createNotification } = require('../notifications/notifications.service')
 const { sendEmail } = require('../../services/email.service');
 const { sendWhatsApp } = require('../../services/whatsapp.service');
 const { sendPush } = require('../../services/push.service');
+const { createExternalIncident } = require('../../services/external.service');
 
 let _io = null;
 function setIo(io) { _io = io; }
@@ -102,6 +103,9 @@ async function createIncident(data, createdBy) {
   }
   emit('incident:created', 'role:admin', inc);
   emit('incident:created', 'role:supervisor', inc);
+
+  // Enviar al sistema externo (no bloquea si falla)
+  createExternalIncident(inc).catch(e => console.error('[ExtAPI] Error al crear:', e.message));
 
   return inc;
 }
