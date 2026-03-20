@@ -60,19 +60,24 @@ async function getToken() {
 
 async function createExternalIncident(incident) {
   const enabled = await getSetting('ext_api_enabled');
-  if (enabled !== '1') return;
+  console.log('[ExtAPI] enabled:', enabled);
+  if (enabled !== '1') { console.log('[ExtAPI] Integración desactivada, omitiendo'); return; }
 
   const baseUrl = await getSetting('ext_api_url');
+  console.log('[ExtAPI] URL:', baseUrl);
+
   const token = await getToken();
+  console.log('[ExtAPI] Token obtenido OK');
 
   const body = {
     customer: incident.client_identificacion || incident.client_phone || '',
     incidentType: TYPE_MAP[incident.type] || 'soporte_internet',
     observation: incident.description,
   };
+  console.log('[ExtAPI] Enviando:', JSON.stringify(body));
 
   const res = await request(baseUrl, 'POST', '/api/v1/incidence', body, token);
-  console.log('[ExtAPI] Incidencia creada:', res.status, res.data);
+  console.log('[ExtAPI] Respuesta:', res.status, JSON.stringify(res.data));
   return res.data;
 }
 
