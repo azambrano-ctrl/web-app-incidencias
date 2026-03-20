@@ -4,7 +4,7 @@ import { getUsers } from '../../api/users.api';
 
 const EMPTY = {
   title: '', description: '', type: 'internet', priority: 'medium',
-  client_name: '', client_address: '', client_phone: '', client_phone2: '', assigned_to: '',
+  client_name: '', client_address: '', client_phone: '', client_phone2: '', client_identificacion: '', assigned_to: '',
 };
 
 export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
@@ -53,6 +53,7 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
       client_address: c.direccion || f.client_address,
       client_phone: c.celular1 || f.client_phone,
       client_phone2: c.celular2 || f.client_phone2,
+      client_identificacion: c.identificacion || f.client_identificacion,
     }));
     setSuggestions([]);
     setShowSuggestions(false);

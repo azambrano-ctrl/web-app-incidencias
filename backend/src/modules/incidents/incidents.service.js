@@ -87,12 +87,12 @@ async function listIncidents(filters, userId, userRole) {
 async function createIncident(data, createdBy) {
   const db = getDb();
   const ticket = await generateTicket();
-  const { title, description, type, priority = 'medium', client_name, client_address, client_phone, client_phone2, assigned_to } = data;
+  const { title, description, type, priority = 'medium', client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to } = data;
 
   const { rows } = await db.query(`
-    INSERT INTO incidents (ticket_number, title, description, type, priority, client_name, client_address, client_phone, client_phone2, assigned_to, created_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id
-  `, [ticket, title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, assigned_to || null, createdBy]);
+    INSERT INTO incidents (ticket_number, title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id
+  `, [ticket, title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy]);
 
   const inc = await getIncident(rows[0].id);
 
@@ -209,12 +209,12 @@ async function changeStatus(id, newStatus, comment, changedBy, userRole, solutio
 async function updateIncident(id, data) {
   const db = getDb();
   await getIncident(id);
-  const { title, description, type, priority, client_name, client_address, client_phone, client_phone2, assigned_to } = data;
+  const { title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to } = data;
   await db.query(`
     UPDATE incidents SET title=$1, description=$2, type=$3, priority=$4,
-      client_name=$5, client_address=$6, client_phone=$7, client_phone2=$8, assigned_to=$9, updated_at=NOW()
-    WHERE id=$10
-  `, [title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, assigned_to || null, id]);
+      client_name=$5, client_address=$6, client_phone=$7, client_phone2=$8, client_identificacion=$9, assigned_to=$10, updated_at=NOW()
+    WHERE id=$11
+  `, [title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, id]);
   return getIncident(id);
 }
 

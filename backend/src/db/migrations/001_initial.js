@@ -114,6 +114,7 @@ async function runMigrations() {
 
   // Columnas agregadas posteriormente
   await db.query(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS client_phone2 TEXT`);
+  await db.query(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS client_identificacion TEXT`);
 
   console.log('[DB] Migraciones ejecutadas correctamente.');
 }
