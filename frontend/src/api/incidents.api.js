@@ -15,8 +15,11 @@ export const updateIncident = (id, data) =>
 export const assignIncident = (id, technicianId) =>
   api.patch(`/incidents/${id}/assign`, { technicianId }).then(r => r.data);
 
-export const changeStatus = (id, status, comment, solution) =>
-  api.patch(`/incidents/${id}/status`, { status, comment, solution }).then(r => r.data);
+export const changeStatus = (id, status, comment, solution, signature) =>
+  api.patch(`/incidents/${id}/status`, { status, comment, solution, signature }).then(r => r.data);
+
+export const getMapIncidents = () =>
+  api.get('/incidents/map').then(r => r.data);
 
 export const addComment = (id, body) =>
   api.post(`/incidents/${id}/comments`, { body }).then(r => r.data);

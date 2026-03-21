@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import SignatureCanvas from 'react-signature-canvas';
 import { getIncident, changeStatus, addComment, assignIncident, updateIncident } from '../api/incidents.api';
 import { getUsers } from '../api/users.api';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +10,7 @@ import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import BottomNav from '../components/layout/BottomNav';
 import { StatusBadge, PriorityBadge } from '../components/incidents/StatusBadge';
+import { SLABadge } from '../components/incidents/SLABadge';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { TYPE_LABELS, STATUS_TRANSITIONS, STATUS_LABELS } from '../utils/constants';
 import { toast } from 'react-hot-toast';
@@ -20,12 +22,14 @@ export default function IncidentDetailPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
+  const sigRef = useRef(null);
   const [comment, setComment] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [statusComment, setStatusComment] = useState('');
   const [solution, setSolution] = useState('');
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [sigEmpty, setSigEmpty] = useState(true);
 
   const { data: inc, isLoading, refetch } = useQuery({
     queryKey: ['incident', id],
@@ -56,13 +60,20 @@ export default function IncidentDetailPage() {
   }, [socket, id]);
 
   const statusMut = useMutation({
-    mutationFn: () => changeStatus(id, newStatus, statusComment, solution),
+    mutationFn: () => {
+      const signature = (newStatus === 'resolved' && sigRef.current && !sigRef.current.isEmpty())
+        ? sigRef.current.toDataURL('image/png')
+        : null;
+      return changeStatus(id, newStatus, statusComment, solution, signature);
+    },
     onSuccess: () => {
       toast.success('Estado actualizado');
       setShowStatusModal(false);
       setStatusComment('');
       setSolution('');
       setNewStatus('');
+      setSigEmpty(true);
+      sigRef.current?.clear();
       refetch();
     },
     onError: e => toast.error(e.response?.data?.error || 'Error'),
@@ -121,9 +132,16 @@ export default function IncidentDetailPage() {
                   </div>
                 )}
                 {inc.due_at && (
-                  <div className={`due-date ${new Date(inc.due_at) < new Date() ? 'overdue' : ''}`}>
-                    ⏰ Fecha límite: {new Date(inc.due_at).toLocaleString('es-HN')}
-                    {new Date(inc.due_at) < new Date() && <span className="overdue-tag"> VENCIDA</span>}
+                  <div className={`due-date ${new Date(inc.due_at) < new Date() && !['resolved','cancelled'].includes(inc.status) ? 'overdue' : ''}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span>⏰ SLA: {new Date(inc.due_at).toLocaleString('es-HN')}</span>
+                    <SLABadge dueAt={inc.due_at} status={inc.status} />
+                  </div>
+                )}
+                {inc.client_signature && inc.status === 'resolved' && (
+                  <div style={{ marginTop: 16, padding: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
+                    <h4 style={{ marginBottom: 8, color: '#166534' }}>✍️ Firma del cliente</h4>
+                    <img src={inc.client_signature} alt="Firma del cliente" style={{ maxWidth: '100%', border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff' }} />
                   </div>
                 )}
               </div>
@@ -252,19 +270,40 @@ export default function IncidentDetailPage() {
               </label>
 
               {newStatus === 'resolved' && (
-                <label style={{ marginTop: 12 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    ✅ Solución aplicada <span style={{ color: '#ef4444', fontWeight: 700 }}>*</span>
-                  </span>
-                  <textarea
-                    value={solution}
-                    onChange={e => setSolution(e.target.value)}
-                    rows={4}
-                    required
-                    placeholder="Describe qué se hizo para resolver el problema: equipo cambiado, cable reparado, configuración aplicada, etc."
-                    style={{ borderColor: !solution.trim() ? '#fca5a5' : undefined }}
-                  />
-                </label>
+                <>
+                  <label style={{ marginTop: 12 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      ✅ Solución aplicada <span style={{ color: '#ef4444', fontWeight: 700 }}>*</span>
+                    </span>
+                    <textarea
+                      value={solution}
+                      onChange={e => setSolution(e.target.value)}
+                      rows={4}
+                      required
+                      placeholder="Describe qué se hizo para resolver el problema: equipo cambiado, cable reparado, configuración aplicada, etc."
+                      style={{ borderColor: !solution.trim() ? '#fca5a5' : undefined }}
+                    />
+                  </label>
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>✍️ Firma del cliente <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional)</span></span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => { sigRef.current?.clear(); setSigEmpty(true); }}
+                      >Limpiar</button>
+                    </div>
+                    <div style={{ border: '2px dashed var(--border)', borderRadius: 8, overflow: 'hidden', background: '#fff', touchAction: 'none' }}>
+                      <SignatureCanvas
+                        ref={sigRef}
+                        penColor="#1e293b"
+                        canvasProps={{ width: 440, height: 160, style: { width: '100%', height: 160, display: 'block' } }}
+                        onEnd={() => setSigEmpty(false)}
+                      />
+                    </div>
+                    {sigEmpty && <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Pide al cliente que firme en el recuadro</p>}
+                  </div>
+                </>
               )}
 
               <label style={{ marginTop: 12 }}>Comentario adicional

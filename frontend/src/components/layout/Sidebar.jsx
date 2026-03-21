@@ -7,6 +7,7 @@ export default function Sidebar() {
   const links = [
     { to: '/', label: '📊 Dashboard', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/incidencias', label: '🎫 Incidencias', roles: ['admin', 'supervisor', 'technician'] },
+    { to: '/mapa', label: '🗺️ Mapa', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/usuarios', label: '👥 Usuarios', roles: ['admin'] },
     { to: '/reportes', label: '📈 Reportes', roles: ['admin', 'supervisor'] },
     { to: '/configuracion', label: '⚙️ Configuración', roles: ['admin'] },

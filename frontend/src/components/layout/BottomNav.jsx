@@ -13,6 +13,7 @@ export default function BottomNav() {
   const links = [
     { to: '/', label: 'Dashboard', icon: '📊', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/incidencias', label: 'Incidencias', icon: '🎫', roles: ['admin', 'supervisor', 'technician'] },
+    { to: '/mapa', label: 'Mapa', icon: '🗺️', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/configuracion', label: 'Config', icon: '⚙️', roles: ['admin'] },
     { to: '/reportes', label: 'Reportes', icon: '📈', roles: ['admin', 'supervisor'] },
   ].filter(l => l.roles.includes(user?.role));

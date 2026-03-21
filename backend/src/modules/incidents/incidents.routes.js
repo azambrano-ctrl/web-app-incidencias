@@ -24,6 +24,10 @@ router.get('/reports/summary', authorize('admin', 'supervisor'), async (req, res
   try { res.json(await svc.getSummary()); } catch (e) { next(e); }
 });
 
+router.get('/map', async (req, res, next) => {
+  try { res.json(await svc.getMapIncidents(req.user.id, req.user.role)); } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try { res.json(await svc.getIncident(req.params.id)); } catch (e) { next(e); }
 });
@@ -55,7 +59,7 @@ router.patch('/:id/status',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
-      res.json(await svc.changeStatus(req.params.id, req.body.status, req.body.comment, req.user.id, req.user.role, req.body.solution));
+      res.json(await svc.changeStatus(req.params.id, req.body.status, req.body.comment, req.user.id, req.user.role, req.body.solution, req.body.signature));
     } catch (e) { next(e); }
   }
 );

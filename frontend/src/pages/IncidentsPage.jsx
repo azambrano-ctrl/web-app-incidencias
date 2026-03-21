@@ -10,6 +10,7 @@ import Topbar from '../components/layout/Topbar';
 import BottomNav from '../components/layout/BottomNav';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { StatusBadge, PriorityBadge } from '../components/incidents/StatusBadge';
+import { SLABadge } from '../components/incidents/SLABadge';
 import { TYPE_LABELS, STATUS_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '../utils/constants';
 import { toast } from 'react-hot-toast';
 
@@ -125,6 +126,7 @@ export default function IncidentsPage() {
                       <th>Servicio</th>
                       <th>Prioridad</th>
                       <th>Estado</th>
+                      <th>SLA</th>
                       <th>Técnico</th>
                       <th>Cliente</th>
                       <th>Creada</th>
@@ -133,7 +135,7 @@ export default function IncidentsPage() {
                   </thead>
                   <tbody>
                     {incidents.length === 0 && (
-                      <tr><td colSpan={9} className="table-empty">No hay incidencias</td></tr>
+                      <tr><td colSpan={10} className="table-empty">No hay incidencias</td></tr>
                     )}
                     {incidents.map(inc => (
                       <tr key={inc.id} onClick={() => navigate(`/incidencias/${inc.id}`)} className={`table-row-click${isOverdue(inc) ? ' row-overdue' : ''}`}>
@@ -145,6 +147,7 @@ export default function IncidentsPage() {
                         <td>{TYPE_LABELS[inc.type]}</td>
                         <td><PriorityBadge priority={inc.priority} /></td>
                         <td><StatusBadge status={inc.status} /></td>
+                        <td><SLABadge dueAt={inc.due_at} status={inc.status} /></td>
                         <td>{inc.assigned_name || <span className="unassigned">Sin asignar</span>}</td>
                         <td>{inc.client_name}</td>
                         <td>{new Date(inc.created_at).toLocaleDateString('es-HN')}</td>
@@ -197,6 +200,7 @@ export default function IncidentsPage() {
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{TYPE_LABELS[inc.type]}</span>
                       <code className="ticket" style={{ fontSize: 11 }}>{inc.ticket_number}</code>
                     </div>
+                    {inc.due_at && <div style={{ marginBottom: 4 }}><SLABadge dueAt={inc.due_at} status={inc.status} /></div>}
                     <div style={{ fontSize: 13, fontWeight: 600, margin: '6px 0 2px' }}>
                       👤 {inc.client_name}
                     </div>

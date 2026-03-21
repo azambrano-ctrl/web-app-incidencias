@@ -4,6 +4,9 @@ const { sendEmail } = require('../../services/email.service');
 const { sendWhatsApp } = require('../../services/whatsapp.service');
 const { sendPush } = require('../../services/push.service');
 const { createExternalIncident } = require('../../services/external.service');
+const { geocodeAddress } = require('../../services/geocoding.service');
+
+const SLA_HOURS = { critical: 2, high: 4, medium: 8, low: 24 };
 
 let _io = null;
 function setIo(io) { _io = io; }
@@ -89,12 +92,23 @@ async function createIncident(data, createdBy) {
   const ticket = await generateTicket();
   const { title, description, type, priority = 'medium', client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to } = data;
 
+  const slaHours = SLA_HOURS[priority] || 8;
+  const dueAt = data.due_at || new Date(Date.now() + slaHours * 3600000).toISOString();
+
   const { rows } = await db.query(`
-    INSERT INTO incidents (ticket_number, title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id
-  `, [ticket, title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy]);
+    INSERT INTO incidents (ticket_number, title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by, due_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
+  `, [ticket, title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy, dueAt]);
 
   const inc = await getIncident(rows[0].id);
+
+  // Geocodificar dirección en segundo plano
+  geocodeAddress(client_address).then(coords => {
+    if (coords) {
+      db.query(`UPDATE incidents SET latitude=$1, longitude=$2 WHERE id=$3`, [coords.lat, coords.lng, inc.id])
+        .catch(e => console.error('[Geocode] Error guardando coordenadas:', e.message));
+    }
+  }).catch(() => {});
 
   const { rows: admins } = await db.query(`SELECT id FROM users WHERE role IN ('admin','supervisor') AND active=1`);
   for (const admin of admins) {
@@ -157,7 +171,7 @@ async function assignIncident(id, technicianId, assignedBy) {
   return updated;
 }
 
-async function changeStatus(id, newStatus, comment, changedBy, userRole, solution) {
+async function changeStatus(id, newStatus, comment, changedBy, userRole, solution, signature) {
   const db = getDb();
   const inc = await getIncident(id);
 
@@ -173,7 +187,7 @@ async function changeStatus(id, newStatus, comment, changedBy, userRole, solutio
   try {
     await client.query('BEGIN');
     if (newStatus === 'resolved') {
-      await client.query(`UPDATE incidents SET status=$1, updated_at=NOW(), resolved_at=NOW(), solution=$2 WHERE id=$3`, [newStatus, solution.trim(), id]);
+      await client.query(`UPDATE incidents SET status=$1, updated_at=NOW(), resolved_at=NOW(), solution=$2, client_signature=$3 WHERE id=$4`, [newStatus, solution.trim(), signature || null, id]);
     } else {
       await client.query(`UPDATE incidents SET status=$1, updated_at=NOW() WHERE id=$2`, [newStatus, id]);
     }
@@ -250,4 +264,24 @@ async function getSummary() {
   return { byStatus, byPriority, techLoad, avgResolution };
 }
 
-module.exports = { setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus, updateIncident, addComment, getSummary };
+async function getMapIncidents(userId, userRole) {
+  const db = getDb();
+  const params = [];
+  let where = `WHERE i.latitude IS NOT NULL AND i.status NOT IN ('cancelled','resolved','closed')`;
+  if (userRole === 'technician') {
+    where += ` AND i.assigned_to=$1`;
+    params.push(userId);
+  }
+  const { rows } = await db.query(`
+    SELECT i.id, i.ticket_number, i.title, i.status, i.priority, i.type,
+      i.client_name, i.client_address, i.latitude, i.longitude, i.due_at,
+      u.name as assigned_name
+    FROM incidents i
+    LEFT JOIN users u ON u.id = i.assigned_to
+    ${where}
+    ORDER BY CASE i.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END
+  `, params);
+  return rows;
+}
+
+module.exports = { setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus, updateIncident, addComment, getSummary, getMapIncidents };
