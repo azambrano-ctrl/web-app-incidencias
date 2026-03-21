@@ -13,7 +13,11 @@ export function SocketProvider({ children }) {
     const token = localStorage.getItem('token');
     if (!user || !token) return;
 
-    const socket = io(import.meta.env.VITE_SOCKET_URL, {
+    // Usar VITE_SOCKET_URL si está definida, sino derivar desde VITE_API_URL
+    const socketUrl = import.meta.env.VITE_SOCKET_URL ||
+      (import.meta.env.VITE_API_URL || '').replace('/api/v1', '');
+
+    const socket = io(socketUrl, {
       auth: { token },
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
