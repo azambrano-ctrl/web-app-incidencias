@@ -17,16 +17,28 @@ export function SocketProvider({ children }) {
     const socketUrl = import.meta.env.VITE_SOCKET_URL ||
       (import.meta.env.VITE_API_URL || '').replace('/api/v1', '');
 
+    console.log('[Socket] Conectando a:', socketUrl);
+
     const socket = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      reconnectionDelay: 3000,
       timeout: 20000,
+      forceNew: true,
     });
 
-    socket.on('connect', () => setConnected(true));
-    socket.on('disconnect', () => setConnected(false));
+    socket.on('connect', () => {
+      console.log('[Socket] Conectado ✅ id:', socket.id);
+      setConnected(true);
+    });
+    socket.on('disconnect', (reason) => {
+      console.warn('[Socket] Desconectado:', reason);
+      setConnected(false);
+    });
+    socket.on('connect_error', (err) => {
+      console.error('[Socket] Error de conexión:', err.message, err);
+    });
 
     socketRef.current = socket;
     return () => { socket.disconnect(); socketRef.current = null; };
