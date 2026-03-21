@@ -95,10 +95,12 @@ async function createIncident(data, createdBy) {
   const slaHours = SLA_HOURS[priority] || 8;
   const dueAt = data.due_at || new Date(Date.now() + slaHours * 3600000).toISOString();
 
+  const initialStatus = assigned_to ? 'assigned' : 'open';
+
   const { rows } = await db.query(`
-    INSERT INTO incidents (ticket_number, title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by, due_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
-  `, [ticket, title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy, dueAt]);
+    INSERT INTO incidents (ticket_number, title, description, type, priority, status, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by, due_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id
+  `, [ticket, title, description, type, priority, initialStatus, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy, dueAt]);
 
   const inc = await getIncident(rows[0].id);
 

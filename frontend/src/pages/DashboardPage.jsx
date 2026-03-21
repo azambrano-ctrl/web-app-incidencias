@@ -154,10 +154,10 @@ export default function DashboardPage() {
   const avgResolution = data?.avgResolution || [];
 
   const totalOpen = byStatus.filter(s => !['resolved', 'closed', 'cancelled'].includes(s.status))
-    .reduce((acc, s) => acc + s.count, 0);
-  const critical = byPriority.find(p => p.priority === 'critical')?.count || 0;
-  const resolved = byStatus.find(s => s.status === 'resolved')?.count || 0;
-  const unassigned = byStatus.find(s => s.status === 'open')?.count || 0;
+    .reduce((acc, s) => acc + parseInt(s.count), 0);
+  const critical = parseInt(byPriority.find(p => p.priority === 'critical')?.count || 0);
+  const resolved = parseInt(byStatus.find(s => s.status === 'resolved')?.count || 0);
+  const unassigned = parseInt(byStatus.find(s => s.status === 'open')?.count || 0);
 
   return (
     <div className="app-layout">
