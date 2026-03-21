@@ -119,6 +119,12 @@ async function runMigrations() {
   await db.query(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION`);
   await db.query(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS client_signature TEXT`);
 
+  // Corregir incidencias con técnico asignado pero estado "open"
+  await db.query(`
+    UPDATE incidents SET status='assigned'
+    WHERE status='open' AND assigned_to IS NOT NULL
+  `);
+
   console.log('[DB] Migraciones ejecutadas correctamente.');
 }
 
