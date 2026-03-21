@@ -19,8 +19,10 @@ export function SocketProvider({ children }) {
 
     const socket = io(socketUrl, {
       auth: { token },
-      reconnectionAttempts: 5,
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 10,
       reconnectionDelay: 2000,
+      timeout: 20000,
     });
 
     socket.on('connect', () => setConnected(true));

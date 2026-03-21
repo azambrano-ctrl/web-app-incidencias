@@ -4,12 +4,26 @@ const jwt = require('jsonwebtoken');
 let io;
 
 function initSocket(httpServer) {
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+  ].filter(Boolean);
+
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+          callback(null, true);
+        } else {
+          callback(new Error('Socket: origin no permitido'));
+        }
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   // Middleware de autenticación Socket.io
