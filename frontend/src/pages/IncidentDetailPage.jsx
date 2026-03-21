@@ -2,7 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SignatureCanvas from 'react-signature-canvas';
-import { getIncident, changeStatus, addComment, assignIncident, updateIncident } from '../api/incidents.api';
+import {
+  getIncident, changeStatus, addComment, assignIncident, updateIncident,
+  getIncidents, linkIncident, unlinkIncident,
+  getPhotos, getPhoto, uploadPhoto, deletePhoto,
+} from '../api/incidents.api';
+import {
+  getIncidentChecklist, createIncidentChecklist, toggleChecklistItem, getTemplates,
+} from '../api/checklist.api';
 import { getUsers } from '../api/users.api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -23,6 +30,8 @@ export default function IncidentDetailPage() {
   const navigate = useNavigate();
 
   const sigRef = useRef(null);
+  const photoInputRef = useRef(null);
+
   const [comment, setComment] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -30,6 +39,19 @@ export default function IncidentDetailPage() {
   const [solution, setSolution] = useState('');
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [sigEmpty, setSigEmpty] = useState(true);
+
+  // Parent-child grouping
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [parentSearch, setParentSearch] = useState('');
+  const [selectedParent, setSelectedParent] = useState('');
+
+  // Photos
+  const [lightboxPhoto, setLightboxPhoto] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Checklist assign
+  const [showChecklistModal, setShowChecklistModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   const { data: inc, isLoading, refetch } = useQuery({
     queryKey: ['incident', id],
@@ -40,6 +62,34 @@ export default function IncidentDetailPage() {
     queryKey: ['technicians'],
     queryFn: () => getUsers('technician'),
     enabled: ['admin', 'supervisor'].includes(user?.role),
+  });
+
+  // Checklist
+  const { data: checklist, refetch: refetchChecklist } = useQuery({
+    queryKey: ['checklist', id],
+    queryFn: () => getIncidentChecklist(id),
+    enabled: !!id,
+  });
+
+  // Photos list (metadata only)
+  const { data: photos = [], refetch: refetchPhotos } = useQuery({
+    queryKey: ['photos', id],
+    queryFn: () => getPhotos(id),
+    enabled: !!id,
+  });
+
+  // Templates for checklist assignment
+  const { data: templates = [] } = useQuery({
+    queryKey: ['checklist-templates'],
+    queryFn: getTemplates,
+    enabled: ['admin', 'supervisor'].includes(user?.role),
+  });
+
+  // Incidents for parent search
+  const { data: allIncidents } = useQuery({
+    queryKey: ['incidents', { limit: 200 }],
+    queryFn: () => getIncidents({ limit: 200 }),
+    enabled: showLinkModal,
   });
 
   useEffect(() => {
@@ -91,10 +141,93 @@ export default function IncidentDetailPage() {
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
 
+  const linkMut = useMutation({
+    mutationFn: (parentId) => linkIncident(id, parentId),
+    onSuccess: () => {
+      toast.success('Incidencia agrupada');
+      setShowLinkModal(false);
+      setSelectedParent('');
+      setParentSearch('');
+      refetch();
+    },
+    onError: e => toast.error(e.response?.data?.error || 'Error al agrupar'),
+  });
+
+  const unlinkMut = useMutation({
+    mutationFn: () => unlinkIncident(id),
+    onSuccess: () => { toast.success('Desvinculada del padre'); refetch(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const toggleItemMut = useMutation({
+    mutationFn: (index) => toggleChecklistItem(id, index),
+    onSuccess: () => refetchChecklist(),
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const assignChecklistMut = useMutation({
+    mutationFn: (templateId) => createIncidentChecklist(id, { template_id: templateId }),
+    onSuccess: () => {
+      toast.success('Checklist asignado');
+      setShowChecklistModal(false);
+      setSelectedTemplate('');
+      refetchChecklist();
+    },
+    onError: e => toast.error(e.response?.data?.error || 'Error al asignar checklist'),
+  });
+
+  const deletePhotoMut = useMutation({
+    mutationFn: (photoId) => deletePhoto(id, photoId),
+    onSuccess: () => { toast.success('Foto eliminada'); refetchPhotos(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (photos.length >= 5) { toast.error('Máximo 5 fotos por incidencia'); return; }
+    setUploadingPhoto(true);
+    try {
+      // Compress image to max 800px width
+      const compressed = await compressImage(file, 800);
+      await uploadPhoto(id, compressed.data, file.name, file.type);
+      toast.success('Foto subida');
+      refetchPhotos();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al subir foto');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleViewPhoto = async (photoId) => {
+    try {
+      const photo = await getPhoto(id, photoId);
+      setLightboxPhoto(photo);
+    } catch {
+      toast.error('Error al cargar la foto');
+    }
+  };
+
   if (isLoading) return <div className="app-layout"><Sidebar /><main className="main-content"><div className="loading-center">Cargando...</div></main></div>;
   if (!inc) return null;
 
   const allowedStatuses = STATUS_TRANSITIONS[user?.role] || [];
+
+  // Checklist progress
+  const clItems = checklist?.items || [];
+  const clTotal = clItems.length;
+  const clChecked = clItems.filter(i => i.checked).length;
+  const clProgress = clTotal > 0 ? Math.round((clChecked / clTotal) * 100) : 0;
+
+  // Filtered incidents for parent search
+  const filteredForParent = (allIncidents?.data || []).filter(inc2 =>
+    inc2.id !== parseInt(id) &&
+    !inc2.parent_id && // only top-level incidents as parents
+    (inc2.ticket_number.toLowerCase().includes(parentSearch.toLowerCase()) ||
+     inc2.title.toLowerCase().includes(parentSearch.toLowerCase()))
+  );
 
   return (
     <div className="app-layout">
@@ -105,6 +238,30 @@ export default function IncidentDetailPage() {
           <div className="detail-back">
             <button className="btn btn-sm btn-secondary" onClick={() => navigate('/incidencias')}>← Volver</button>
           </div>
+
+          {/* Escalation banner */}
+          {inc.escalated && (
+            <div style={{
+              background: 'linear-gradient(135deg,#fef3c7,#fde68a)',
+              border: '1px solid #f59e0b',
+              borderRadius: 8,
+              padding: '12px 16px',
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              color: '#92400e',
+              fontWeight: 600,
+            }}>
+              <span style={{ fontSize: 20 }}>🔺</span>
+              <div>
+                <div>Incidencia escalada al supervisor</div>
+                <div style={{ fontWeight: 400, fontSize: 13 }}>
+                  Escalada el {new Date(inc.escalated_at).toLocaleString('es-HN')}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="detail-grid">
             <div className="detail-main">
@@ -119,6 +276,12 @@ export default function IncidentDetailPage() {
                   <div className="detail-badges">
                     <StatusBadge status={inc.status} />
                     <PriorityBadge priority={inc.priority} />
+                    {inc.escalated && (
+                      <span style={{
+                        background: '#fef3c7', color: '#92400e', border: '1px solid #f59e0b',
+                        borderRadius: 4, padding: '2px 6px', fontSize: 12, fontWeight: 600
+                      }}>🔺 Escalada</span>
+                    )}
                   </div>
                 </div>
                 <div className="detail-description">
@@ -142,6 +305,162 @@ export default function IncidentDetailPage() {
                   <div style={{ marginTop: 16, padding: 16, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8 }}>
                     <h4 style={{ marginBottom: 8, color: '#166534' }}>✍️ Firma del cliente</h4>
                     <img src={inc.client_signature} alt="Firma del cliente" style={{ maxWidth: '100%', border: '1px solid #e2e8f0', borderRadius: 4, background: '#fff' }} />
+                  </div>
+                )}
+              </div>
+
+              {/* ── Incidencia padre / Sub-incidencias ── */}
+              {(inc.parent_id || parseInt(inc.children_count) > 0) && (
+                <div className="card">
+                  {inc.parent_id && (
+                    <div style={{ marginBottom: parseInt(inc.children_count) > 0 ? 16 : 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <h4 style={{ margin: 0 }}>↑ Incidencia padre</h4>
+                        {['admin', 'supervisor'].includes(user?.role) && (
+                          <button className="btn btn-sm btn-secondary" onClick={() => unlinkMut.mutate()} disabled={unlinkMut.isPending}>
+                            Desvincular
+                          </button>
+                        )}
+                      </div>
+                      <div
+                        style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer' }}
+                        onClick={() => navigate(`/incidencias/${inc.parent_id}`)}
+                      >
+                        <code style={{ fontWeight: 600 }}>{inc.parent_ticket}</code>
+                        <span style={{ marginLeft: 8, color: '#64748b' }}>{inc.parent_title}</span>
+                      </div>
+                    </div>
+                  )}
+                  {parseInt(inc.children_count) > 0 && (
+                    <div>
+                      <h4 style={{ marginBottom: 8 }}>🔗 Sub-incidencias ({inc.children_count})</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {(inc.children || []).map(child => (
+                          <div
+                            key={child.id}
+                            style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                            onClick={() => navigate(`/incidencias/${child.id}`)}
+                          >
+                            <code style={{ fontWeight: 600, fontSize: 12 }}>{child.ticket_number}</code>
+                            <span style={{ flex: 1, color: '#374151', fontSize: 13 }}>{child.title}</span>
+                            <StatusBadge status={child.status} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Checklist ── */}
+              {!checklist && ['admin', 'supervisor'].includes(user?.role) && !['resolved', 'cancelled', 'closed'].includes(inc.status) && (
+                <div className="card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <h3 style={{ margin: 0 }}>✅ Checklist de resolución</h3>
+                    <button className="btn btn-sm btn-secondary" onClick={() => setShowChecklistModal(true)}>
+                      + Asignar checklist
+                    </button>
+                  </div>
+                  <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 8, marginBottom: 0 }}>
+                    No hay checklist asignado a esta incidencia.
+                  </p>
+                </div>
+              )}
+              {checklist && (
+                <div className="card">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <h3 style={{ margin: 0 }}>✅ Checklist de resolución</h3>
+                    <span style={{ fontSize: 13, color: '#64748b' }}>{clChecked}/{clTotal} completados</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ background: '#e2e8f0', borderRadius: 99, height: 8, marginBottom: 16, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${clProgress}%`, height: '100%', borderRadius: 99,
+                      background: clProgress === 100 ? '#22c55e' : '#6366f1',
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {clItems.map((item, idx) => (
+                      <label
+                        key={idx}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                          padding: '8px 10px', borderRadius: 6,
+                          background: item.checked ? '#f0fdf4' : '#fafafa',
+                          border: `1px solid ${item.checked ? '#bbf7d0' : '#e2e8f0'}`,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={item.checked}
+                          onChange={() => toggleItemMut.mutate(idx)}
+                          style={{ width: 16, height: 16, cursor: 'pointer' }}
+                        />
+                        <span style={{
+                          flex: 1, fontSize: 14,
+                          textDecoration: item.checked ? 'line-through' : 'none',
+                          color: item.checked ? '#6b7280' : '#111827'
+                        }}>
+                          {item.label}
+                        </span>
+                        {item.checked && item.checked_at && (
+                          <span style={{ fontSize: 11, color: '#6b7280' }}>
+                            {new Date(item.checked_at).toLocaleString('es-HN')}
+                          </span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  {clProgress === 100 && (
+                    <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, color: '#166534', fontSize: 13, fontWeight: 600 }}>
+                      ✅ Checklist completo — puedes resolver la incidencia
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Fotos ── */}
+              <div className="card">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <h3 style={{ margin: 0 }}>📷 Fotos ({photos.length}/5)</h3>
+                  {photos.length < 5 && !['resolved', 'cancelled', 'closed'].includes(inc.status) && (
+                    <>
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        onClick={() => photoInputRef.current?.click()}
+                        disabled={uploadingPhoto}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        📷 {uploadingPhoto ? 'Subiendo...' : 'Agregar foto'}
+                      </button>
+                      <input
+                        ref={photoInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        style={{ display: 'none' }}
+                        onChange={handlePhotoUpload}
+                      />
+                    </>
+                  )}
+                </div>
+                {photos.length === 0 ? (
+                  <p style={{ color: '#94a3b8', fontSize: 13, margin: 0 }}>No hay fotos adjuntas</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                    {photos.map(photo => (
+                      <PhotoThumb
+                        key={photo.id}
+                        photo={photo}
+                        incidentId={id}
+                        user={user}
+                        onView={() => handleViewPhoto(photo.id)}
+                        onDelete={() => {
+                          if (confirm('¿Eliminar esta foto?')) deletePhotoMut.mutate(photo.id);
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -220,6 +539,16 @@ export default function IncidentDetailPage() {
                     Editar incidencia
                   </button>
                 )}
+                {['admin', 'supervisor'].includes(user?.role) && !inc.parent_id && !['resolved', 'cancelled', 'closed'].includes(inc.status) && (
+                  <button className="btn btn-secondary btn-full" onClick={() => setShowLinkModal(true)}>
+                    🔗 Agrupar con...
+                  </button>
+                )}
+                {['admin', 'supervisor'].includes(user?.role) && inc.parent_id && (
+                  <button className="btn btn-secondary btn-full" onClick={() => unlinkMut.mutate()} disabled={unlinkMut.isPending}>
+                    ✂️ Desvincular del padre
+                  </button>
+                )}
               </div>
 
               <div className="card">
@@ -245,6 +574,9 @@ export default function IncidentDetailPage() {
                   <div><span>Prioridad</span><PriorityBadge priority={inc.priority} /></div>
                   <div><span>Estado</span><StatusBadge status={inc.status} /></div>
                   {inc.resolved_at && <div><span>Resuelta</span><span>{new Date(inc.resolved_at).toLocaleDateString('es-HN')}</span></div>}
+                  {inc.escalated && (
+                    <div><span>Escalada</span><span style={{ color: '#d97706', fontWeight: 600 }}>🔺 Sí</span></div>
+                  )}
                 </div>
               </div>
             </div>
@@ -252,6 +584,7 @@ export default function IncidentDetailPage() {
         </div>
       </main>
 
+      {/* ── Status modal ── */}
       {showStatusModal && (
         <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
           <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
@@ -268,6 +601,13 @@ export default function IncidentDetailPage() {
                   ))}
                 </select>
               </label>
+
+              {newStatus === 'resolved' && checklist && clChecked < clTotal && (
+                <div style={{ marginTop: 12, padding: '10px 12px', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 6, color: '#c2410c', fontSize: 13 }}>
+                  ⚠️ El checklist tiene {clTotal - clChecked} ítem{clTotal - clChecked > 1 ? 's' : ''} sin completar.
+                  Debes completarlo antes de resolver.
+                </div>
+              )}
 
               {newStatus === 'resolved' && (
                 <>
@@ -314,7 +654,12 @@ export default function IncidentDetailPage() {
               <button className="btn btn-secondary" onClick={() => { setShowStatusModal(false); setSolution(''); setNewStatus(''); }}>Cancelar</button>
               <button
                 className="btn btn-primary"
-                disabled={!newStatus || (newStatus === 'resolved' && !solution.trim()) || statusMut.isPending}
+                disabled={
+                  !newStatus ||
+                  (newStatus === 'resolved' && !solution.trim()) ||
+                  (newStatus === 'resolved' && checklist && clChecked < clTotal) ||
+                  statusMut.isPending
+                }
                 onClick={() => statusMut.mutate()}
               >
                 {statusMut.isPending ? 'Actualizando...' : 'Confirmar'}
@@ -324,6 +669,7 @@ export default function IncidentDetailPage() {
         </div>
       )}
 
+      {/* ── Edit modal ── */}
       {showEdit && (
         <IncidentForm
           initial={inc}
@@ -332,7 +678,188 @@ export default function IncidentDetailPage() {
           loading={updateMut.isPending}
         />
       )}
+
+      {/* ── Link to parent modal ── */}
+      {showLinkModal && (
+        <div className="modal-overlay" onClick={() => setShowLinkModal(false)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🔗 Agrupar con incidencia padre</h3>
+              <button className="modal-close" onClick={() => setShowLinkModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <label>Buscar incidencia
+                <input
+                  value={parentSearch}
+                  onChange={e => setParentSearch(e.target.value)}
+                  placeholder="Buscar por ticket o título..."
+                />
+              </label>
+              <div style={{ maxHeight: 250, overflowY: 'auto', marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {filteredForParent.slice(0, 20).map(opt => (
+                  <div
+                    key={opt.id}
+                    onClick={() => setSelectedParent(opt.id)}
+                    style={{
+                      padding: '8px 10px', borderRadius: 6, cursor: 'pointer',
+                      border: `2px solid ${selectedParent === opt.id ? '#6366f1' : '#e2e8f0'}`,
+                      background: selectedParent === opt.id ? '#eef2ff' : '#fafafa',
+                    }}
+                  >
+                    <code style={{ fontSize: 12, fontWeight: 600 }}>{opt.ticket_number}</code>
+                    <span style={{ marginLeft: 8, fontSize: 13 }}>{opt.title}</span>
+                    <StatusBadge status={opt.status} />
+                  </div>
+                ))}
+                {filteredForParent.length === 0 && (
+                  <p style={{ color: '#94a3b8', fontSize: 13 }}>No se encontraron incidencias</p>
+                )}
+              </div>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-secondary" onClick={() => setShowLinkModal(false)}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                disabled={!selectedParent || linkMut.isPending}
+                onClick={() => linkMut.mutate(selectedParent)}
+              >
+                {linkMut.isPending ? 'Agrupando...' : 'Agrupar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assign checklist modal ── */}
+      {showChecklistModal && (
+        <div className="modal-overlay" onClick={() => setShowChecklistModal(false)}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>✅ Asignar checklist</h3>
+              <button className="modal-close" onClick={() => setShowChecklistModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              {templates.length === 0 ? (
+                <p style={{ color: '#94a3b8' }}>No hay templates disponibles. Crea uno en Configuración.</p>
+              ) : (
+                <label>Seleccionar template
+                  <select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}>
+                    <option value="">Seleccionar...</option>
+                    {templates.filter(t => t.active).map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.items?.length || 0} ítems)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-secondary" onClick={() => setShowChecklistModal(false)}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                disabled={!selectedTemplate || assignChecklistMut.isPending}
+                onClick={() => assignChecklistMut.mutate(selectedTemplate)}
+              >
+                {assignChecklistMut.isPending ? 'Asignando...' : 'Asignar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Lightbox ── */}
+      {lightboxPhoto && (
+        <div
+          className="modal-overlay"
+          onClick={() => setLightboxPhoto(null)}
+          style={{ zIndex: 1000, background: 'rgba(0,0,0,0.85)' }}
+        >
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setLightboxPhoto(null)}
+              style={{
+                position: 'absolute', top: -36, right: 0, background: 'none',
+                border: 'none', color: '#fff', fontSize: 28, cursor: 'pointer', lineHeight: 1
+              }}
+            >✕</button>
+            <img
+              src={lightboxPhoto.data}
+              alt={lightboxPhoto.filename}
+              style={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: 8 }}
+            />
+            <div style={{ color: '#fff', fontSize: 12, marginTop: 8, textAlign: 'center' }}>
+              {lightboxPhoto.filename}
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNav />
     </div>
   );
+}
+
+// Photo thumbnail component that loads full data on demand
+function PhotoThumb({ photo, incidentId, user, onView, onDelete }) {
+  const [src, setSrc] = useState(null);
+
+  useEffect(() => {
+    getPhoto(incidentId, photo.id).then(full => setSrc(full.data)).catch(() => {});
+  }, [photo.id]);
+
+  const canDelete = ['admin', 'supervisor'].includes(user?.role) || photo.uploaded_by === user?.id;
+
+  return (
+    <div style={{ position: 'relative', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e2e8f0', cursor: 'pointer' }}>
+      {src ? (
+        <img
+          src={src}
+          alt={photo.filename}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onClick={onView}
+        />
+      ) : (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+          📷
+        </div>
+      )}
+      {canDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          style={{
+            position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)',
+            border: 'none', color: '#fff', borderRadius: 99, width: 22, height: 22,
+            fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >✕</button>
+      )}
+    </div>
+  );
+}
+
+// Image compression utility
+async function compressImage(file, maxWidth) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const data = canvas.toDataURL('image/jpeg', 0.8);
+        resolve({ data });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }

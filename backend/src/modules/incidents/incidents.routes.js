@@ -73,4 +73,49 @@ router.post('/:id/comments',
   }
 );
 
+// ── Parent-child linking ──────────────────────────────────────────────────────
+
+router.post('/:id/link',
+  authorize('admin', 'supervisor'),
+  body('parent_id').notEmpty().withMessage('parent_id requerido'),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try { res.json(await svc.linkIncident(req.params.id, req.body.parent_id)); } catch (e) { next(e); }
+  }
+);
+
+router.delete('/:id/link', authorize('admin', 'supervisor'), async (req, res, next) => {
+  try { res.json(await svc.unlinkIncident(req.params.id)); } catch (e) { next(e); }
+});
+
+// ── Photos ────────────────────────────────────────────────────────────────────
+
+router.get('/:id/photos', async (req, res, next) => {
+  try { res.json(await svc.getPhotos(req.params.id)); } catch (e) { next(e); }
+});
+
+router.post('/:id/photos', async (req, res, next) => {
+  try {
+    const { data, filename, mime_type } = req.body;
+    if (!data) return res.status(400).json({ error: 'Se requiere el campo data (base64)' });
+    const photo = await svc.uploadPhoto(
+      req.params.id,
+      req.user.id,
+      data,
+      filename || `photo_${Date.now()}.jpg`,
+      mime_type || 'image/jpeg'
+    );
+    res.status(201).json(photo);
+  } catch (e) { next(e); }
+});
+
+router.get('/:id/photos/:photoId', async (req, res, next) => {
+  try { res.json(await svc.getPhoto(req.params.id, req.params.photoId)); } catch (e) { next(e); }
+});
+
+router.delete('/:id/photos/:photoId', async (req, res, next) => {
+  try { res.json(await svc.deletePhoto(req.params.id, req.params.photoId, req.user.id, req.user.role)); } catch (e) { next(e); }
+});
+
 module.exports = router;

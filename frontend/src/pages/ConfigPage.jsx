@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { importClients, getClientStats } from '../api/clients.api';
 import { getUsers, createUser, updateUser, deactivateUser, resetPassword } from '../api/users.api';
 import { getSettings, saveSettings, testEmail, testWhatsApp, getVapidKey, pushSubscribe, pushUnsubscribe } from '../api/settings.api';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/checklist.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import BottomNav from '../components/layout/BottomNav';
@@ -11,8 +12,8 @@ import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
 
 const EMPTY_TECH = { name: '', email: '', password: '', phone: '', role: 'technician' };
-
 const DEFAULT_WA_TEMPLATE = '{"token":"{token}","to":"{to}","body":"{message}"}';
+const EMPTY_TEMPLATE = { name: '', items: [''] };
 
 export default function ConfigPage() {
   const fileRef = useRef();
@@ -49,6 +50,15 @@ export default function ConfigPage() {
   const [savingNotif, setSavingNotif] = useState(false);
   const [pushState, setPushState] = useState('idle'); // idle | requesting | subscribed | unsupported
 
+  // Escalation
+  const [escalationHours, setEscalationHours] = useState('4');
+  const [savingEscalation, setSavingEscalation] = useState(false);
+
+  // Checklist templates
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE);
+
   const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['client-stats'],
     queryFn: getClientStats,
@@ -57,6 +67,13 @@ export default function ConfigPage() {
   const { data: technicians = [] } = useQuery({
     queryKey: ['technicians'],
     queryFn: () => getUsers('technician'),
+  });
+
+  // Checklist templates
+  const { data: templates = [], refetch: refetchTemplates } = useQuery({
+    queryKey: ['checklist-templates'],
+    queryFn: getTemplates,
+    enabled: ['admin', 'supervisor'].includes(user?.role),
   });
 
   // Cargar ajustes de notificaciones
@@ -69,6 +86,7 @@ export default function ConfigPage() {
       setWaCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('whatsapp_'))) }));
       setPushCfg(prev => ({ ...prev, push_enabled: s.push_enabled || '0' }));
       setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
+      if (s.escalation_hours) setEscalationHours(s.escalation_hours);
     },
   });
 
@@ -113,6 +131,50 @@ export default function ConfigPage() {
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
 
+  // Template mutations
+  const saveTemplateMut = useMutation({
+    mutationFn: (data) => editingTemplate
+      ? updateTemplate(editingTemplate.id, data)
+      : createTemplate(data),
+    onSuccess: () => {
+      toast.success(editingTemplate ? 'Template actualizado' : 'Template creado');
+      setShowTemplateForm(false);
+      setEditingTemplate(null);
+      setTemplateForm(EMPTY_TEMPLATE);
+      refetchTemplates();
+    },
+    onError: e => toast.error(e.response?.data?.error || 'Error al guardar template'),
+  });
+
+  const deleteTemplateMut = useMutation({
+    mutationFn: (id) => deleteTemplate(id),
+    onSuccess: () => { toast.success('Template eliminado'); refetchTemplates(); },
+    onError: e => toast.error(e.response?.data?.error || 'Error'),
+  });
+
+  const openCreateTemplate = () => {
+    setTemplateForm(EMPTY_TEMPLATE);
+    setEditingTemplate(null);
+    setShowTemplateForm(true);
+  };
+
+  const openEditTemplate = (t) => {
+    setTemplateForm({ name: t.name, items: t.items });
+    setEditingTemplate(t);
+    setShowTemplateForm(true);
+  };
+
+  const addTemplateItem = () => setTemplateForm(f => ({ ...f, items: [...f.items, ''] }));
+  const updateTemplateItem = (idx, val) => setTemplateForm(f => {
+    const items = [...f.items];
+    items[idx] = val;
+    return { ...f, items };
+  });
+  const removeTemplateItem = (idx) => setTemplateForm(f => ({
+    ...f,
+    items: f.items.filter((_, i) => i !== idx)
+  }));
+
   // ── Guardar API externa ──
   const handleSaveExt = async () => {
     setSavingExt(true);
@@ -132,6 +194,16 @@ export default function ConfigPage() {
       qc.invalidateQueries(['settings']);
     } catch { toast.error('Error al guardar ajustes'); }
     finally { setSavingNotif(false); }
+  };
+
+  // ── Guardar umbral de escalamiento ──
+  const handleSaveEscalation = async () => {
+    setSavingEscalation(true);
+    try {
+      await saveSettings({ escalation_hours: escalationHours });
+      toast.success('Umbral de escalamiento guardado');
+    } catch { toast.error('Error al guardar'); }
+    finally { setSavingEscalation(false); }
   };
 
   // ── Probar email ──
@@ -285,6 +357,90 @@ export default function ConfigPage() {
               </div>
             )}
           </div>
+
+          {/* ── ESCALAMIENTO AUTOMÁTICO ── */}
+          {user?.role === 'admin' && (
+            <div className="card">
+              <h3 style={{ marginBottom: 8 }}>🔺 Escalamiento automático</h3>
+              <p style={{ color: '#64748b', marginBottom: 16, fontSize: 14 }}>
+                Si una incidencia permanece en estado "abierta" o "asignada" sin pasar a "en progreso" durante este tiempo, se escalará automáticamente a supervisores y administradores.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>Umbral de escalamiento:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={escalationHours}
+                    onChange={e => setEscalationHours(e.target.value)}
+                    style={{ width: 80 }}
+                  />
+                  <span style={{ color: '#64748b' }}>horas</span>
+                </label>
+                <button className="btn btn-primary btn-sm" onClick={handleSaveEscalation} disabled={savingEscalation}>
+                  {savingEscalation ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+                Valor predeterminado: 4 horas. Rango válido: 1–168 horas.
+              </p>
+            </div>
+          )}
+
+          {/* ── CHECKLIST TEMPLATES ── */}
+          {['admin', 'supervisor'].includes(user?.role) && (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>✅ Templates de checklist</h3>
+                  <p style={{ color: '#64748b', fontSize: 13, marginTop: 4, marginBottom: 0 }}>
+                    Define listas de verificación reutilizables para resolver incidencias.
+                  </p>
+                </div>
+                {user?.role === 'admin' && (
+                  <button className="btn btn-primary btn-sm" onClick={openCreateTemplate}>+ Nuevo template</button>
+                )}
+              </div>
+              {templates.length === 0 ? (
+                <p className="empty-msg">No hay templates de checklist</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {templates.map(t => (
+                    <div key={t.id} style={{
+                      border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px',
+                      background: t.active ? '#fafafa' : '#f8f8f8',
+                      opacity: t.active ? 1 : 0.6,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                            {t.name}
+                            {!t.active && <span style={{ marginLeft: 6, fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(inactivo)</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b' }}>
+                            {t.items?.length || 0} ítem{t.items?.length !== 1 ? 's' : ''}:
+                            {' '}{(t.items || []).slice(0, 3).join(', ')}{t.items?.length > 3 ? '...' : ''}
+                          </div>
+                        </div>
+                        {user?.role === 'admin' && (
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <button className="btn btn-sm btn-secondary" onClick={() => openEditTemplate(t)}>Editar</button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => { if (confirm(`¿Eliminar template "${t.name}"?`)) deleteTemplateMut.mutate(t.id); }}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── NOTIFICACIONES ── */}
           {user?.role === 'admin' && (
@@ -654,6 +810,84 @@ export default function ConfigPage() {
           </div>
         </div>
       )}
+
+      {/* ── MODAL CHECKLIST TEMPLATE ── */}
+      {showTemplateForm && (
+        <div className="modal-overlay" onClick={() => { setShowTemplateForm(false); setEditingTemplate(null); }}>
+          <div className="modal modal-sm" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h3>{editingTemplate ? 'Editar template' : 'Nuevo template de checklist'}</h3>
+              <button className="modal-close" onClick={() => { setShowTemplateForm(false); setEditingTemplate(null); }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <label>Nombre del template *
+                <input
+                  value={templateForm.name}
+                  onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Ej: Revisión de fibra óptica"
+                />
+              </label>
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>Ítems del checklist</span>
+                  <button className="btn btn-sm btn-secondary" onClick={addTemplateItem}>+ Agregar ítem</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {templateForm.items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input
+                        value={item}
+                        onChange={e => updateTemplateItem(idx, e.target.value)}
+                        placeholder={`Ítem ${idx + 1}...`}
+                        style={{ flex: 1 }}
+                      />
+                      {templateForm.items.length > 1 && (
+                        <button
+                          className="btn btn-sm btn-danger"
+                          onClick={() => removeTemplateItem(idx)}
+                          style={{ padding: '4px 8px' }}
+                        >✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {editingTemplate && (
+                <div style={{ marginTop: 12 }}>
+                  <label className="toggle-label" style={{ gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={templateForm.active !== false}
+                      onChange={e => setTemplateForm(f => ({ ...f, active: e.target.checked }))}
+                    />
+                    <span className="toggle-slider" />
+                    Template activo
+                  </label>
+                </div>
+              )}
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-secondary" onClick={() => { setShowTemplateForm(false); setEditingTemplate(null); }}>Cancelar</button>
+              <button
+                className="btn btn-primary"
+                disabled={
+                  !templateForm.name.trim() ||
+                  templateForm.items.every(i => !i.trim()) ||
+                  saveTemplateMut.isPending
+                }
+                onClick={() => saveTemplateMut.mutate({
+                  name: templateForm.name,
+                  items: templateForm.items.filter(i => i.trim()),
+                  active: templateForm.active !== false,
+                })}
+              >
+                {saveTemplateMut.isPending ? 'Guardando...' : (editingTemplate ? 'Guardar cambios' : 'Crear template')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNav />
     </div>
   );

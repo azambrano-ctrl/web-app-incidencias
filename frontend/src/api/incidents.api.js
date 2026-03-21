@@ -26,3 +26,23 @@ export const addComment = (id, body) =>
 
 export const getSummary = () =>
   api.get('/incidents/reports/summary').then(r => r.data);
+
+// Parent-child linking
+export const linkIncident = (id, parent_id) =>
+  api.post(`/incidents/${id}/link`, { parent_id }).then(r => r.data);
+
+export const unlinkIncident = (id) =>
+  api.delete(`/incidents/${id}/link`).then(r => r.data);
+
+// Photos
+export const getPhotos = (id) =>
+  api.get(`/incidents/${id}/photos`).then(r => r.data);
+
+export const getPhoto = (id, photoId) =>
+  api.get(`/incidents/${id}/photos/${photoId}`).then(r => r.data);
+
+export const uploadPhoto = (id, data, filename, mime_type) =>
+  api.post(`/incidents/${id}/photos`, { data, filename, mime_type }).then(r => r.data);
+
+export const deletePhoto = (id, photoId) =>
+  api.delete(`/incidents/${id}/photos/${photoId}`).then(r => r.data);

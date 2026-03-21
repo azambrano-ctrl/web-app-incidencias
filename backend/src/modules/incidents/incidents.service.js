@@ -25,10 +25,13 @@ async function getIncident(id) {
   const { rows } = await db.query(`
     SELECT i.*,
       u1.name as assigned_name, u1.email as assigned_email, u1.phone as assigned_phone,
-      u2.name as created_name
+      u2.name as created_name,
+      parent.ticket_number as parent_ticket, parent.title as parent_title,
+      (SELECT COUNT(*) FROM incidents ch WHERE ch.parent_id = i.id) as children_count
     FROM incidents i
     LEFT JOIN users u1 ON u1.id = i.assigned_to
     LEFT JOIN users u2 ON u2.id = i.created_by
+    LEFT JOIN incidents parent ON parent.id = i.parent_id
     WHERE i.id = $1
   `, [id]);
   const inc = rows[0];
@@ -46,7 +49,13 @@ async function getIncident(id) {
     WHERE c.incident_id=$1 ORDER BY c.created_at ASC
   `, [id]);
 
-  return { ...inc, history, comments };
+  // Load children if this is a parent
+  const { rows: children } = await db.query(`
+    SELECT id, ticket_number, title, status, priority FROM incidents
+    WHERE parent_id=$1 ORDER BY created_at ASC
+  `, [id]);
+
+  return { ...inc, history, comments, children };
 }
 
 async function listIncidents(filters, userId, userRole) {
@@ -73,7 +82,8 @@ async function listIncidents(filters, userId, userRole) {
   const { rows } = await db.query(`
     SELECT i.*,
       u1.name as assigned_name, u1.email as assigned_email,
-      u2.name as created_name
+      u2.name as created_name,
+      (SELECT COUNT(*) FROM incidents ch WHERE ch.parent_id = i.id) as children_count
     FROM incidents i
     LEFT JOIN users u1 ON u1.id = i.assigned_to
     LEFT JOIN users u2 ON u2.id = i.created_by
@@ -184,6 +194,23 @@ async function changeStatus(id, newStatus, comment, changedBy, userRole, solutio
     throw Object.assign(new Error('Debe ingresar la solución aplicada para resolver la incidencia'), { status: 400 });
   }
 
+  // Block resolving if checklist has unchecked items
+  if (newStatus === 'resolved') {
+    const { rows: clRows } = await db.query(
+      `SELECT items FROM incident_checklists WHERE incident_id=$1`, [id]
+    );
+    if (clRows[0]) {
+      const items = clRows[0].items;
+      const unchecked = items.filter(item => !item.checked);
+      if (unchecked.length > 0) {
+        throw Object.assign(
+          new Error('Debes completar el checklist antes de resolver'),
+          { status: 400 }
+        );
+      }
+    }
+  }
+
   const oldStatus = inc.status;
   const client = await db.connect();
   try {
@@ -198,6 +225,19 @@ async function changeStatus(id, newStatus, comment, changedBy, userRole, solutio
     await client.query('COMMIT');
   } catch (e) { await client.query('ROLLBACK'); throw e; }
   finally { client.release(); }
+
+  // Auto-close children when parent is resolved
+  if (newStatus === 'resolved') {
+    const { rows: children } = await db.query(
+      `SELECT id FROM incidents WHERE parent_id=$1 AND status NOT IN ('resolved','closed','cancelled')`, [id]
+    );
+    for (const child of children) {
+      await db.query(`UPDATE incidents SET status='resolved', updated_at=NOW(), resolved_at=NOW(), solution=$1 WHERE id=$2`,
+        [`Auto-cerrada: incidencia padre ${inc.ticket_number} fue resuelta`, child.id]);
+      await db.query(`INSERT INTO status_history (incident_id, changed_by, old_status, new_status, comment) VALUES ($1,$2,$3,$4,$5)`,
+        [child.id, changedBy, 'in_progress', 'resolved', `Auto-cerrada al resolver incidencia padre ${inc.ticket_number}`]);
+    }
+  }
 
   const updated = await getIncident(id);
   const { rows: [changer] } = await db.query('SELECT name FROM users WHERE id=$1', [changedBy]);
@@ -246,6 +286,75 @@ async function addComment(incidentId, userId, body) {
   return comment;
 }
 
+async function linkIncident(id, parentId) {
+  const db = getDb();
+  if (parseInt(id) === parseInt(parentId)) {
+    throw Object.assign(new Error('Una incidencia no puede ser su propio padre'), { status: 400 });
+  }
+  // Verify parent exists
+  const { rows: parentRows } = await db.query(`SELECT id FROM incidents WHERE id=$1`, [parentId]);
+  if (!parentRows[0]) throw Object.assign(new Error('Incidencia padre no encontrada'), { status: 404 });
+
+  // Prevent circular references: the target parent must not be a child of this incident
+  const { rows: childCheck } = await db.query(`SELECT id FROM incidents WHERE id=$1 AND parent_id=$2`, [parentId, id]);
+  if (childCheck[0]) throw Object.assign(new Error('Referencia circular: la incidencia padre es ya hijo de esta'), { status: 400 });
+
+  await db.query(`UPDATE incidents SET parent_id=$1, updated_at=NOW() WHERE id=$2`, [parentId, id]);
+  return getIncident(id);
+}
+
+async function unlinkIncident(id) {
+  const db = getDb();
+  await db.query(`UPDATE incidents SET parent_id=NULL, updated_at=NOW() WHERE id=$1`, [id]);
+  return getIncident(id);
+}
+
+async function getPhotos(incidentId) {
+  const db = getDb();
+  const { rows } = await db.query(`
+    SELECT ip.id, ip.filename, ip.mime_type, ip.created_at, u.name as uploaded_by_name, ip.uploaded_by
+    FROM incident_photos ip
+    JOIN users u ON u.id = ip.uploaded_by
+    WHERE ip.incident_id=$1 ORDER BY ip.created_at ASC
+  `, [incidentId]);
+  return rows;
+}
+
+async function getPhoto(incidentId, photoId) {
+  const db = getDb();
+  const { rows } = await db.query(`SELECT * FROM incident_photos WHERE id=$1 AND incident_id=$2`, [photoId, incidentId]);
+  if (!rows[0]) throw Object.assign(new Error('Foto no encontrada'), { status: 404 });
+  return rows[0];
+}
+
+async function uploadPhoto(incidentId, uploadedBy, data, filename, mimeType) {
+  const db = getDb();
+  // Check max 5 photos per incident
+  const { rows: countRows } = await db.query(`SELECT COUNT(*) as c FROM incident_photos WHERE incident_id=$1`, [incidentId]);
+  if (parseInt(countRows[0].c) >= 5) {
+    throw Object.assign(new Error('Máximo 5 fotos por incidencia'), { status: 400 });
+  }
+  const { rows } = await db.query(
+    `INSERT INTO incident_photos (incident_id, uploaded_by, data, filename, mime_type) VALUES ($1,$2,$3,$4,$5) RETURNING id, filename, mime_type, created_at`,
+    [incidentId, uploadedBy, data, filename, mimeType]
+  );
+  return rows[0];
+}
+
+async function deletePhoto(incidentId, photoId, userId, userRole) {
+  const db = getDb();
+  const { rows } = await db.query(`SELECT * FROM incident_photos WHERE id=$1 AND incident_id=$2`, [photoId, incidentId]);
+  if (!rows[0]) throw Object.assign(new Error('Foto no encontrada'), { status: 404 });
+
+  // Only admin/supervisor or uploader can delete
+  if (!['admin', 'supervisor'].includes(userRole) && rows[0].uploaded_by !== userId) {
+    throw Object.assign(new Error('No tiene permiso para eliminar esta foto'), { status: 403 });
+  }
+
+  await db.query(`DELETE FROM incident_photos WHERE id=$1`, [photoId]);
+  return { message: 'Foto eliminada' };
+}
+
 async function getSummary() {
   const db = getDb();
   const { rows: byStatus } = await db.query(`SELECT status, COUNT(*) as count FROM incidents GROUP BY status`);
@@ -286,4 +395,9 @@ async function getMapIncidents(userId, userRole) {
   return rows;
 }
 
-module.exports = { setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus, updateIncident, addComment, getSummary, getMapIncidents };
+module.exports = {
+  setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus,
+  updateIncident, addComment, getSummary, getMapIncidents,
+  linkIncident, unlinkIncident,
+  getPhotos, getPhoto, uploadPhoto, deletePhoto,
+};

@@ -17,6 +17,12 @@ function startReminderJob() {
     try {
       const db = getDb();
 
+      // ── Get escalation threshold from settings ──
+      const { rows: settingRows } = await db.query(
+        `SELECT value FROM settings WHERE key='escalation_hours'`
+      );
+      const escalationHours = parseFloat(settingRows[0]?.value || '4');
+
       // Incidencias con due_at próximo o vencido
       const { rows: pending } = await db.query(`
         SELECT i.*, u.name as technician_name, u.email as tech_email, u.phone as tech_phone
@@ -67,6 +73,46 @@ function startReminderJob() {
         }
         await db.query(`UPDATE incidents SET last_reminded_at=NOW() WHERE id=$1`, [inc.id]);
       }
+
+      // ── Escalamiento automático ──
+      // Find incidents in 'open' or 'assigned' (not yet in_progress) for more than escalationHours
+      // that have not been escalated yet
+      const { rows: toEscalate } = await db.query(`
+        SELECT i.* FROM incidents i
+        WHERE i.status IN ('open','assigned')
+          AND i.escalated = FALSE
+          AND i.created_at < NOW() - ($1 || ' hours')::INTERVAL
+          AND i.status NOT IN ('resolved','closed','cancelled')
+      `, [String(escalationHours)]);
+
+      if (toEscalate.length > 0) {
+        const { rows: supervisors } = await db.query(
+          `SELECT id FROM users WHERE role IN ('admin','supervisor') AND active=1`
+        );
+
+        for (const inc of toEscalate) {
+          // Mark as escalated
+          await db.query(
+            `UPDATE incidents SET escalated=TRUE, escalated_at=NOW(), updated_at=NOW() WHERE id=$1`,
+            [inc.id]
+          );
+
+          const escMsg = `🔺 ESCALADA: La incidencia ${inc.ticket_number} "${inc.title}" lleva más de ${escalationHours}h sin ser atendida`;
+
+          for (const sup of supervisors) {
+            const notif = await createNotification(sup.id, 'escalation', escMsg, inc.id);
+            if (_io) {
+              _io.to(`user:${sup.id}`).emit('notification:new', notif);
+              _io.to(`user:${sup.id}`).emit('incident:escalated', { incident: inc, message: escMsg });
+            }
+            // Notify via push
+            sendPush(sup.id, { title: 'Incidencia escalada', body: escMsg, url: `/incidencias/${inc.id}` }).catch(() => {});
+          }
+
+          console.log(`[Cron] Escalada: ${inc.ticket_number}`);
+        }
+      }
+
     } catch (err) {
       console.error('[Cron] Error:', err.message);
     }

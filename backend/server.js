@@ -4,6 +4,7 @@ const { initDb } = require('./src/config/database');
 const app = require('./src/app');
 const { initSocket } = require('./src/config/socket');
 const { runMigrations } = require('./src/db/migrations/001_initial');
+const { runMigrations002 } = require('./src/db/migrations/002_features');
 const { runSeeds } = require('./src/db/seeds/001_admin');
 const { startReminderJob, setIo: setReminderIo } = require('./src/jobs/reminder.job');
 const { setIo: setIncidentsIo } = require('./src/modules/incidents/incidents.service');
@@ -16,6 +17,7 @@ async function main() {
 
   // 2. Ejecutar migraciones y semillas
   await runMigrations();
+  await runMigrations002();
   await runSeeds();
 
   // 3. Crear servidor HTTP

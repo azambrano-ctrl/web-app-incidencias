@@ -42,10 +42,12 @@ export default function IncidentsPage() {
     socket.on('incident:created', refresh);
     socket.on('incident:status_changed', refresh);
     socket.on('incident:assigned', refresh);
+    socket.on('incident:escalated', refresh);
     return () => {
       socket.off('incident:created', refresh);
       socket.off('incident:status_changed', refresh);
       socket.off('incident:assigned', refresh);
+      socket.off('incident:escalated', refresh);
     };
   }, [socket]);
 
@@ -72,6 +74,7 @@ export default function IncidentsPage() {
     return (Date.now() - last.getTime()) > 24 * 60 * 60 * 1000;
   };
   const overdueCount = incidents.filter(isOverdue).length;
+  const escalatedCount = incidents.filter(inc => inc.escalated).length;
 
   return (
     <div className="app-layout">
@@ -113,6 +116,15 @@ export default function IncidentsPage() {
             </div>
           )}
 
+          {escalatedCount > 0 && (
+            <div className="overdue-banner" style={{ background: 'linear-gradient(135deg,#fef3c7,#fde68a)', borderColor: '#f59e0b', color: '#92400e' }}>
+              <span className="overdue-banner-icon">🔺</span>
+              <span>
+                <strong>{escalatedCount} incidencia{escalatedCount > 1 ? 's' : ''}</strong> escalada{escalatedCount > 1 ? 's' : ''} — requiere{escalatedCount > 1 ? 'n' : ''} atención del supervisor
+              </span>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="loading-center">Cargando...</div>
           ) : (
@@ -141,7 +153,12 @@ export default function IncidentsPage() {
                       <tr key={inc.id} onClick={() => navigate(`/incidencias/${inc.id}`)} className={`table-row-click${isOverdue(inc) ? ' row-overdue' : ''}`}>
                         <td>
                           <code className="ticket">{inc.ticket_number}</code>
+                          {inc.escalated && <span className="escalated-tag" title="Escalada">🔺</span>}
                           {isOverdue(inc) && <span className="overdue-tag">⚠️ +24h</span>}
+                          {parseInt(inc.children_count) > 0 && (
+                            <span className="parent-tag" title={`${inc.children_count} sub-incidencias`}>🔗 {inc.children_count}</span>
+                          )}
+                          {inc.parent_id && <span className="child-tag" title="Sub-incidencia">↳</span>}
                         </td>
                         <td className="incident-title">{inc.title}</td>
                         <td>{TYPE_LABELS[inc.type]}</td>
@@ -184,11 +201,16 @@ export default function IncidentsPage() {
                 {incidents.map(inc => (
                   <div
                     key={inc.id}
-                    className={`incident-card${isOverdue(inc) ? ' card-overdue' : ''}`}
-                    style={{ borderLeftColor: isOverdue(inc) ? '#ef4444' : STATUS_COLORS[inc.status] }}
+                    className={`incident-card${isOverdue(inc) ? ' card-overdue' : ''}${inc.escalated ? ' card-escalated' : ''}`}
+                    style={{ borderLeftColor: inc.escalated ? '#f59e0b' : isOverdue(inc) ? '#ef4444' : STATUS_COLORS[inc.status] }}
                     onClick={() => navigate(`/incidencias/${inc.id}`)}
                   >
-                    {isOverdue(inc) && (
+                    {inc.escalated && (
+                      <div className="overdue-card-banner" style={{ background: '#fef3c7', color: '#92400e', borderBottom: '1px solid #fde68a' }}>
+                        🔺 Incidencia escalada — requiere atención
+                      </div>
+                    )}
+                    {isOverdue(inc) && !inc.escalated && (
                       <div className="overdue-card-banner">⚠️ Sin actividad por más de 24 horas</div>
                     )}
                     <div className="incident-card-top">
@@ -199,6 +221,12 @@ export default function IncidentsPage() {
                       <PriorityBadge priority={inc.priority} />
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{TYPE_LABELS[inc.type]}</span>
                       <code className="ticket" style={{ fontSize: 11 }}>{inc.ticket_number}</code>
+                      {parseInt(inc.children_count) > 0 && (
+                        <span style={{ fontSize: 11, color: '#6366f1' }}>🔗 {inc.children_count} sub-inc.</span>
+                      )}
+                      {inc.parent_id && (
+                        <span style={{ fontSize: 11, color: '#8b5cf6' }}>↳ sub-incidencia</span>
+                      )}
                     </div>
                     {inc.due_at && <div style={{ marginBottom: 4 }}><SLABadge dueAt={inc.due_at} status={inc.status} /></div>}
                     <div style={{ fontSize: 13, fontWeight: 600, margin: '6px 0 2px' }}>

@@ -11,6 +11,7 @@ const incidentRoutes = require('./modules/incidents/incidents.routes');
 const notificationRoutes = require('./modules/notifications/notifications.routes');
 const clientRoutes = require('./modules/clients/clients.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
+const checklistRoutes = require('./modules/checklists/checklists.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/v1/incidents', incidentRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/clients', clientRoutes);
 app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/checklists', checklistRoutes);
 
 app.get('/api/v1/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
