@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { body, validationResult } = require('express-validator');
 const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
+const { audit } = require('../../middleware/audit');
 const svc = require('./users.service');
 
 router.use(authenticate);
@@ -25,7 +26,11 @@ router.post('/', authorize('admin'),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    try { res.status(201).json(await svc.createUser(req.body)); } catch (e) { next(e); }
+    try {
+      const user = await svc.createUser(req.body);
+      await audit(req.user.id, 'user:create', 'users', user.id, { email: user.email, role: user.role }, req.ip);
+      res.status(201).json(user);
+    } catch (e) { next(e); }
   }
 );
 
@@ -34,7 +39,11 @@ router.put('/:id', authorize('admin'),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    try { res.json(await svc.updateUser(req.params.id, req.body)); } catch (e) { next(e); }
+    try {
+      const user = await svc.updateUser(req.params.id, req.body);
+      await audit(req.user.id, 'user:update', 'users', req.params.id, { email: req.body.email, role: req.body.role }, req.ip);
+      res.json(user);
+    } catch (e) { next(e); }
   }
 );
 
@@ -43,12 +52,20 @@ router.patch('/:id/password', authorize('admin'),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    try { res.json(await svc.resetPassword(req.params.id, req.body.password)); } catch (e) { next(e); }
+    try {
+      const result = await svc.resetPassword(req.params.id, req.body.password);
+      await audit(req.user.id, 'user:password_reset', 'users', req.params.id, null, req.ip);
+      res.json(result);
+    } catch (e) { next(e); }
   }
 );
 
 router.delete('/:id', authorize('admin'), async (req, res, next) => {
-  try { res.json(await svc.deactivateUser(req.params.id)); } catch (e) { next(e); }
+  try {
+    const result = await svc.deactivateUser(req.params.id);
+    await audit(req.user.id, 'user:deactivate', 'users', req.params.id, null, req.ip);
+    res.json(result);
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

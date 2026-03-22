@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
+const { audit } = require('../../middleware/audit');
 const { getSettings, setSettings } = require('./settings.service');
 const { sendEmail } = require('../../services/email.service');
 const { sendWhatsApp } = require('../../services/whatsapp.service');
@@ -38,6 +39,9 @@ router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
       if (allowed.has(k)) toSave[k] = v;
     }
     await setSettings(toSave);
+    // Auditar qué claves se cambiaron (sin los valores sensibles)
+    const changedKeys = Object.keys(toSave).filter(k => !SENSITIVE_KEYS.has(k));
+    await audit(req.user.id, 'settings:update', 'settings', null, { keys: changedKeys }, req.ip);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

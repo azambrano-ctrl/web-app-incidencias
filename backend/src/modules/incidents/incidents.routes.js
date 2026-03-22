@@ -6,13 +6,16 @@ const svc = require('./incidents.service');
 
 router.use(authenticate);
 
+// Elimina etiquetas HTML para prevenir XSS almacenado
+const stripTags = (val) => typeof val === 'string' ? val.replace(/<[^>]*>/g, '').trim() : val;
+
 const incidentValidation = [
-  body('title').notEmpty().withMessage('Título requerido'),
-  body('description').notEmpty().withMessage('Descripción requerida'),
+  body('title').notEmpty().withMessage('Título requerido').customSanitizer(stripTags),
+  body('description').notEmpty().withMessage('Descripción requerida').customSanitizer(stripTags),
   body('type').isIn(['internet', 'tv', 'both']).withMessage('Tipo inválido'),
   body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
-  body('client_name').notEmpty().withMessage('Nombre del cliente requerido'),
-  body('client_address').notEmpty().withMessage('Dirección del cliente requerida'),
+  body('client_name').notEmpty().withMessage('Nombre del cliente requerido').customSanitizer(stripTags),
+  body('client_address').notEmpty().withMessage('Dirección del cliente requerida').customSanitizer(stripTags),
 ];
 
 router.get('/', async (req, res, next) => {
@@ -103,7 +106,7 @@ router.patch('/:id/status',
 );
 
 router.post('/:id/comments',
-  body('body').notEmpty().withMessage('Comentario vacío'),
+  body('body').notEmpty().withMessage('Comentario vacío').customSanitizer(stripTags),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -133,8 +136,22 @@ router.delete('/:id/link', authorize('admin', 'supervisor'), async (req, res, ne
 
 // ── Photos ────────────────────────────────────────────────────────────────────
 
+// Helper: verifica que técnico tenga acceso al incidente antes de ver sus fotos
+async function checkPhotoAccess(req, res) {
+  if (req.user.role !== 'technician') return true;
+  const inc = await svc.getIncident(req.params.id);
+  if (inc.assigned_to !== req.user.id) {
+    res.status(403).json({ error: 'No tienes acceso a las fotos de esta incidencia' });
+    return false;
+  }
+  return true;
+}
+
 router.get('/:id/photos', async (req, res, next) => {
-  try { res.json(await svc.getPhotos(req.params.id)); } catch (e) { next(e); }
+  try {
+    if (!await checkPhotoAccess(req, res)) return;
+    res.json(await svc.getPhotos(req.params.id));
+  } catch (e) { next(e); }
 });
 
 const MAX_PHOTO_BYTES  = 5 * 1024 * 1024; // 5 MB en base64 ≈ 6.7 MB string
@@ -158,7 +175,10 @@ router.post('/:id/photos', async (req, res, next) => {
 });
 
 router.get('/:id/photos/:photoId', async (req, res, next) => {
-  try { res.json(await svc.getPhoto(req.params.id, req.params.photoId)); } catch (e) { next(e); }
+  try {
+    if (!await checkPhotoAccess(req, res)) return;
+    res.json(await svc.getPhoto(req.params.id, req.params.photoId));
+  } catch (e) { next(e); }
 });
 
 router.delete('/:id/photos/:photoId', async (req, res, next) => {

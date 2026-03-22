@@ -40,6 +40,19 @@ app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.json({ limit: '15mb' }));
 
+// CSRF: peticiones que modifican estado deben incluir header X-Client
+// Previene ataques donde un sitio externo hace requests usando las cookies del usuario
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+app.use((req, res, next) => {
+  if (SAFE_METHODS.has(req.method)) return next();
+  if (req.path === '/api/v1/auth/login') return next(); // login no tiene cookie aún
+  const clientHeader = req.headers['x-client'];
+  if (!clientHeader || clientHeader !== 'incidencias-spa') {
+    return res.status(403).json({ error: 'Solicitud no autorizada (CSRF)' });
+  }
+  next();
+});
+
 const makeLimiter = (max, windowMs, msg) =>
   rateLimit({ windowMs, max, message: { error: msg } });
 

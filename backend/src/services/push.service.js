@@ -5,18 +5,23 @@ const { getSetting, setSetting } = require('../modules/settings/settings.service
 let vapidInitialized = false;
 
 async function ensureVapidKeys() {
-  if (vapidInitialized) return await getSetting('push_vapid_public');
+  if (vapidInitialized) {
+    // Env var takes priority: return it directly without DB lookup
+    return process.env.VAPID_PUBLIC_KEY || await getSetting('push_vapid_public');
+  }
 
-  let pub  = await getSetting('push_vapid_public');
-  let priv = await getSetting('push_vapid_private');
+  // Priority: environment variables > DB
+  let pub  = process.env.VAPID_PUBLIC_KEY  || await getSetting('push_vapid_public');
+  let priv = process.env.VAPID_PRIVATE_KEY || await getSetting('push_vapid_private');
 
   if (!pub || !priv) {
     const keys = webpush.generateVAPIDKeys();
-    await setSetting('push_vapid_public',  keys.publicKey);
-    await setSetting('push_vapid_private', keys.privateKey);
+    // Only persist to DB if not supplied via env — env vars are more secure
+    if (!process.env.VAPID_PUBLIC_KEY)  await setSetting('push_vapid_public',  keys.publicKey);
+    if (!process.env.VAPID_PRIVATE_KEY) await setSetting('push_vapid_private', keys.privateKey);
     pub  = keys.publicKey;
     priv = keys.privateKey;
-    console.log('[Push] VAPID keys generadas y guardadas.');
+    console.log('[Push] VAPID keys generadas. Para mayor seguridad configura VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY como variables de entorno.');
   }
 
   webpush.setVapidDetails('mailto:admin@incidencias.com', pub, priv);

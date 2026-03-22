@@ -6,6 +6,7 @@ const { initSocket } = require('./src/config/socket');
 const { runMigrations } = require('./src/db/migrations/001_initial');
 const { runMigrations002 } = require('./src/db/migrations/002_features');
 const { runMigrations003 } = require('./src/db/migrations/003_maintenance_oncall');
+const { runMigrations004 } = require('./src/db/migrations/004_audit_log');
 const { runSeeds } = require('./src/db/seeds/001_admin');
 const { startReminderJob, setIo: setReminderIo } = require('./src/jobs/reminder.job');
 const { setIo: setIncidentsIo } = require('./src/modules/incidents/incidents.service');
@@ -30,7 +31,23 @@ async function main() {
   await runMigrations();
   await runMigrations002();
   await runMigrations003();
+  await runMigrations004();
   await runSeeds();
+
+  // 2b. Validar configuración de APIs externas (advertencia, no fatal)
+  try {
+    const { getSetting } = require('./src/modules/settings/settings.service');
+    const gmKey = await getSetting('google_maps_key');
+    if (gmKey && !gmKey.startsWith('AIza')) {
+      console.warn('⚠️  [Config] google_maps_key no tiene el formato esperado de Google Maps (debe empezar con "AIza"). Verifica la clave en Configuración.');
+    }
+    const waUrl = await getSetting('whatsapp_api_url');
+    if (waUrl && !/^https?:\/\/.+/.test(waUrl)) {
+      console.warn('⚠️  [Config] whatsapp_api_url no parece una URL válida.');
+    }
+  } catch (e) {
+    // No detener el arranque si falla esta validación
+  }
 
   // 3. Crear servidor HTTP
   const server = http.createServer(app);

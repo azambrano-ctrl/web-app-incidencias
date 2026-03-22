@@ -2,8 +2,11 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  headers: { 'Content-Type': 'application/json' },
-  withCredentials: true,  // envía la cookie httpOnly en cada request automáticamente
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Client': 'incidencias-spa',  // CSRF: identifica requests legítimos del SPA
+  },
+  withCredentials: true,
 });
 
 api.interceptors.response.use(
