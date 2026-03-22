@@ -1,27 +1,37 @@
+import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
 import { getMapIncidents } from '../api/incidents.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import BottomNav from '../components/layout/BottomNav';
-import { StatusBadge, PriorityBadge } from '../components/incidents/StatusBadge';
-import { SLABadge } from '../components/incidents/SLABadge';
-import { PRIORITY_COLORS } from '../utils/constants';
+import { PRIORITY_COLORS, STATUS_LABELS, PRIORITY_LABELS, STATUS_COLORS } from '../utils/constants';
 
 const LEGEND = [
   { label: 'Crítica', color: PRIORITY_COLORS.critical },
-  { label: 'Alta', color: PRIORITY_COLORS.high },
-  { label: 'Media', color: PRIORITY_COLORS.medium },
-  { label: 'Baja', color: PRIORITY_COLORS.low },
+  { label: 'Alta',    color: PRIORITY_COLORS.high },
+  { label: 'Media',  color: PRIORITY_COLORS.medium },
+  { label: 'Baja',   color: PRIORITY_COLORS.low },
 ];
 
-// Centro por defecto: Tegucigalpa, Honduras
-const DEFAULT_CENTER = [14.0818, -87.2068];
+const DEFAULT_CENTER = [-2.19616, -79.88621]; // Ecuador
+
+function getSLALabel(dueAt, status) {
+  if (!dueAt || ['resolved', 'cancelled', 'closed'].includes(status)) return null;
+  const diffMs = new Date(dueAt).getTime() - Date.now();
+  const diffH  = diffMs / (1000 * 3600);
+  if (diffMs < 0) {
+    const over = Math.abs(diffH);
+    return { label: over < 24 ? `Vencida ${Math.round(over)}h` : `Vencida ${Math.round(over / 24)}d`, color: '#ef4444', text: '#fff' };
+  }
+  if (diffH < 4) return { label: `${Math.round(diffH < 1 ? diffMs / 60000 : diffH)}${diffH < 1 ? 'min' : 'h'} restantes`, color: '#f97316', text: '#fff' };
+  return { label: `${Math.round(diffH)}h restantes`, color: '#dcfce7', text: '#166534' };
+}
 
 export default function MapPage() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const mapRef    = useRef(null);   // DOM node
+  const leafletRef = useRef(null);  // Leaflet map instance
 
   const { data: incidents = [], isLoading } = useQuery({
     queryKey: ['incidents-map'],
@@ -29,9 +39,86 @@ export default function MapPage() {
     refetchInterval: 30000,
   });
 
-  const center = incidents.length > 0
-    ? [parseFloat(incidents[0].latitude), parseFloat(incidents[0].longitude)]
-    : DEFAULT_CENTER;
+  /* ── Inicializar mapa una vez que el DOM está listo ── */
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (leafletRef.current) return; // ya inicializado
+
+    // Importar leaflet dinámicamente (evita problemas con SSR / React 19)
+    import('leaflet').then(({ default: L }) => {
+      import('leaflet/dist/leaflet.css');
+
+      const center = incidents.length > 0
+        ? [parseFloat(incidents[0].latitude), parseFloat(incidents[0].longitude)]
+        : DEFAULT_CENTER;
+
+      const map = L.map(mapRef.current).setView(center, 13);
+      leafletRef.current = map;
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+      }).addTo(map);
+
+      incidents.forEach(inc => {
+        const lat = parseFloat(inc.latitude);
+        const lng = parseFloat(inc.longitude);
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const color = PRIORITY_COLORS[inc.priority] || '#3b82f6';
+        const sla   = getSLALabel(inc.due_at, inc.status);
+
+        const slaHtml = sla
+          ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${sla.color};color:${sla.text};display:inline-block;margin-bottom:6px;">⏱ ${sla.label}</span>`
+          : '';
+
+        const statusColor = STATUS_COLORS[inc.status] || '#9ca3af';
+        const statusHtml  = `<span style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid ${statusColor};color:${statusColor};background:${statusColor}22;">${STATUS_LABELS[inc.status] || inc.status}</span>`;
+        const priorColor  = PRIORITY_COLORS[inc.priority] || '#9ca3af';
+        const priorHtml   = `<span style="font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid ${priorColor};color:${priorColor};background:${priorColor}22;">${PRIORITY_LABELS[inc.priority] || inc.priority}</span>`;
+
+        const popupHtml = `
+          <div style="font-family:-apple-system,sans-serif;min-width:210px;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:3px;">${inc.ticket_number}</div>
+            <div style="font-size:13px;margin-bottom:6px;">${inc.title}</div>
+            <div style="font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.6;">
+              <div>👤 ${inc.client_name || '—'}</div>
+              <div>📍 ${inc.client_address || '—'}</div>
+              ${inc.assigned_name ? `<div>🔧 ${inc.assigned_name}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+              ${statusHtml} ${priorHtml}
+            </div>
+            ${slaHtml}
+            <button
+              data-id="${inc.id}"
+              style="font-size:12px;padding:5px 10px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;width:100%;margin-top:4px;"
+            >Ver detalle →</button>
+          </div>`;
+
+        const marker = L.circleMarker([lat, lng], {
+          radius: 10,
+          color: '#fff',
+          weight: 2,
+          fillColor: color,
+          fillOpacity: 0.85,
+        }).addTo(map);
+
+        marker.bindPopup(popupHtml, { minWidth: 220 });
+
+        marker.on('popupopen', () => {
+          const btn = document.querySelector(`[data-id="${inc.id}"]`);
+          if (btn) btn.addEventListener('click', () => navigate(`/incidencias/${inc.id}`));
+        });
+      });
+    });
+
+    return () => {
+      if (leafletRef.current) {
+        leafletRef.current.remove();
+        leafletRef.current = null;
+      }
+    };
+  }, [incidents, navigate]);
 
   return (
     <div className="app-layout">
@@ -40,7 +127,7 @@ export default function MapPage() {
         <Topbar title="Mapa de Incidencias" />
         <div className="page-body" style={{ padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 60px)' }}>
 
-          {/* Barra de información */}
+          {/* Barra de info */}
           <div style={{ padding: '10px 20px', background: '#fff', borderBottom: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
             <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
               🗺️ {incidents.length} incidencia{incidents.length !== 1 ? 's' : ''} activa{incidents.length !== 1 ? 's' : ''}
@@ -48,73 +135,24 @@ export default function MapPage() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {LEGEND.map(({ label, color }) => (
                 <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: color, display: 'inline-block' }} />
                   {label}
                 </span>
               ))}
             </div>
           </div>
 
-          {/* Mapa */}
+          {/* Contenedor del mapa */}
           {isLoading ? (
             <div className="loading-center">Cargando mapa...</div>
           ) : incidents.length === 0 ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>🗺️</div>
               <p style={{ fontWeight: 600 }}>No hay incidencias activas con ubicación</p>
-              <p style={{ fontSize: 13, marginTop: 8 }}>Las ubicaciones se obtienen automáticamente al crear una incidencia</p>
+              <p style={{ fontSize: 13, marginTop: 8 }}>Las ubicaciones se asignan automáticamente al crear una incidencia</p>
             </div>
           ) : (
-            <div style={{ flex: 1 }}>
-              <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {incidents.map(inc => (
-                  <CircleMarker
-                    key={inc.id}
-                    center={[parseFloat(inc.latitude), parseFloat(inc.longitude)]}
-                    radius={10}
-                    pathOptions={{
-                      color: '#fff',
-                      weight: 2,
-                      fillColor: PRIORITY_COLORS[inc.priority] || '#3b82f6',
-                      fillOpacity: 0.85,
-                    }}
-                  >
-                    <Popup minWidth={220}>
-                      <div style={{ fontFamily: '-apple-system, sans-serif' }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
-                          {inc.ticket_number}
-                        </div>
-                        <div style={{ fontSize: 13, marginBottom: 6 }}>{inc.title}</div>
-                        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-                          <div>👤 {inc.client_name}</div>
-                          <div>📍 {inc.client_address}</div>
-                          {inc.assigned_name && <div>🔧 {inc.assigned_name}</div>}
-                        </div>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-                          <StatusBadge status={inc.status} />
-                          <PriorityBadge priority={inc.priority} />
-                        </div>
-                        {inc.due_at && (
-                          <div style={{ marginBottom: 8 }}>
-                            <SLABadge dueAt={inc.due_at} status={inc.status} />
-                          </div>
-                        )}
-                        <button
-                          style={{ fontSize: 12, padding: '5px 10px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', width: '100%' }}
-                          onClick={() => navigate(`/incidencias/${inc.id}`)}
-                        >
-                          Ver detalle →
-                        </button>
-                      </div>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-              </MapContainer>
-            </div>
+            <div ref={mapRef} style={{ flex: 1, zIndex: 0 }} />
           )}
         </div>
       </main>
