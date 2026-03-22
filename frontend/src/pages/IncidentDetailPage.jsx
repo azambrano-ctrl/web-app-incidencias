@@ -21,7 +21,7 @@ import { SLABadge } from '../components/incidents/SLABadge';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { TYPE_LABELS, STATUS_TRANSITIONS, STATUS_LABELS } from '../utils/constants';
 import { downloadIncidentPDF } from '../utils/incidentPdf';
-import { geocodeIncident } from '../api/incidents.api';
+import { geocodeIncident, setIncidentLocation } from '../api/incidents.api';
 import { toast } from 'react-hot-toast';
 
 export default function IncidentDetailPage() {
@@ -36,6 +36,11 @@ export default function IncidentDetailPage() {
 
   const [pdfLoading, setPdfLoading] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
+  const mapPickerRef = useRef(null);
+  const mapPickerInstance = useRef(null);
+  const mapPickerMarker = useRef(null);
   const [comment, setComment] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -500,7 +505,7 @@ export default function IncidentDetailPage() {
                           style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>📍 En mapa</span>
                       : <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>📍 Sin ubicación</span>
                     }
-                    {/* Botón re-geocodificar (solo si tiene dirección) */}
+                    {/* Botón re-geocodificar automático */}
                     {inc.client_address && (
                       <button
                         className="btn btn-sm btn-secondary"
@@ -514,7 +519,7 @@ export default function IncidentDetailPage() {
                               toast.success('✅ Ubicación encontrada — ya aparece en el mapa');
                               refetch();
                             } else {
-                              toast.error(`No se encontraron coords para "${r.address}". Verifica la dirección.`);
+                              toast.error(`No se encontraron coords para "${r.address}". Usa "Fijar en mapa".`);
                             }
                           } catch {
                             toast.error('Error al geocodificar');
@@ -525,6 +530,17 @@ export default function IncidentDetailPage() {
                         style={{ fontSize: 11, padding: '2px 8px' }}
                       >
                         {geocoding ? '⏳' : '🔄'} {geocoding ? 'Buscando...' : 'Ubicar'}
+                      </button>
+                    )}
+                    {/* Botón fijar manualmente en mapa */}
+                    {['admin', 'supervisor'].includes(user?.role) && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        title="Fijar ubicación manualmente en el mapa"
+                        onClick={() => setShowMapPicker(true)}
+                        style={{ fontSize: 11, padding: '2px 8px' }}
+                      >
+                        📍 Fijar en mapa
                       </button>
                     )}
                   </div>
@@ -868,7 +884,124 @@ export default function IncidentDetailPage() {
         </div>
       )}
 
+      {/* ── Modal selector de ubicación en mapa ── */}
+      {showMapPicker && inc && (
+        <MapPickerModal
+          inc={inc}
+          onClose={() => setShowMapPicker(false)}
+          saving={savingLocation}
+          onSave={async (lat, lng) => {
+            setSavingLocation(true);
+            try {
+              await setIncidentLocation(inc.id, lat, lng);
+              toast.success('✅ Ubicación guardada en el mapa');
+              refetch();
+              setShowMapPicker(false);
+            } catch {
+              toast.error('Error al guardar ubicación');
+            } finally {
+              setSavingLocation(false);
+            }
+          }}
+        />
+      )}
+
       <BottomNav />
+    </div>
+  );
+}
+
+/* ── Componente modal de selección de ubicación ──────────────────────────── */
+function MapPickerModal({ inc, onClose, onSave, saving }) {
+  const containerRef = useRef(null);
+  const mapRef       = useRef(null);
+  const markerRef    = useRef(null);
+  const [picked, setPicked] = useState(
+    inc.latitude && inc.longitude
+      ? { lat: parseFloat(inc.latitude), lng: parseFloat(inc.longitude) }
+      : null
+  );
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let destroyed = false;
+
+    import('leaflet').then(({ default: L }) => {
+      import('leaflet/dist/leaflet.css').then(() => {
+        if (destroyed || mapRef.current) return;
+
+        const initLat = inc.latitude  ? parseFloat(inc.latitude)  : -2.4194;
+        const initLng = inc.longitude ? parseFloat(inc.longitude) : -79.3430;
+        const zoom    = inc.latitude  ? 16 : 14;
+
+        const map = L.map(containerRef.current).setView([initLat, initLng], zoom);
+        mapRef.current = map;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+        }).addTo(map);
+
+        // Marcador inicial si ya tiene coords
+        if (inc.latitude && inc.longitude) {
+          markerRef.current = L.marker([initLat, initLng], { draggable: true }).addTo(map);
+          markerRef.current.on('dragend', () => {
+            const p = markerRef.current.getLatLng();
+            setPicked({ lat: p.lat, lng: p.lng });
+          });
+        }
+
+        // Click en mapa = colocar/mover marcador
+        map.on('click', (e) => {
+          const { lat, lng } = e.latlng;
+          if (markerRef.current) {
+            markerRef.current.setLatLng([lat, lng]);
+          } else {
+            markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+            markerRef.current.on('dragend', () => {
+              const p = markerRef.current.getLatLng();
+              setPicked({ lat: p.lat, lng: p.lng });
+            });
+          }
+          setPicked({ lat, lng });
+        });
+      });
+    });
+
+    return () => {
+      destroyed = true;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
+  }, []);
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 640, width: '95vw' }}>
+        <div className="modal-header">
+          <h3 style={{ margin: 0 }}>📍 Fijar ubicación en el mapa</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+        <div className="modal-body" style={{ padding: 0 }}>
+          <p style={{ padding: '8px 16px 4px', fontSize: 13, color: '#64748b', margin: 0 }}>
+            Haz clic en el mapa para colocar el marcador en la ubicación exacta. Puedes arrastrarlo para ajustarlo.
+          </p>
+          <div ref={containerRef} style={{ height: 380, width: '100%' }} />
+          {picked && (
+            <p style={{ padding: '4px 16px', fontSize: 11, color: '#64748b', margin: 0, fontFamily: 'monospace' }}>
+              📌 {picked.lat.toFixed(6)}, {picked.lng.toFixed(6)}
+            </p>
+          )}
+        </div>
+        <div className="form-actions" style={{ padding: '12px 16px' }}>
+          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button
+            className="btn btn-primary"
+            disabled={!picked || saving}
+            onClick={() => picked && onSave(picked.lat, picked.lng)}
+          >
+            {saving ? 'Guardando...' : '💾 Guardar ubicación'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

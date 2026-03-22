@@ -55,3 +55,6 @@ export const regeocodeIncidents = () =>
 
 export const geocodeIncident = (id) =>
   api.post(`/incidents/${id}/geocode`).then(r => r.data);
+
+export const setIncidentLocation = (id, lat, lng) =>
+  api.patch(`/incidents/${id}/location`, { lat, lng }).then(r => r.data);

@@ -335,6 +335,16 @@ async function geocodeOne(id) {
   return { success: false, address: inc.client_address };
 }
 
+async function setLocation(id, lat, lng) {
+  const db = getDb();
+  const { rows } = await db.query(
+    'UPDATE incidents SET latitude=$1, longitude=$2 WHERE id=$3 RETURNING id',
+    [lat, lng, id]
+  );
+  if (!rows[0]) throw Object.assign(new Error('Incidencia no encontrada'), { status: 404 });
+  return { success: true, lat, lng };
+}
+
 async function addComment(incidentId, userId, body) {
   const db = getDb();
   await getIncident(incidentId);
@@ -491,7 +501,7 @@ async function deleteIncident(id, deletedBy) {
 
 module.exports = {
   setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus,
-  updateIncident, geocodeOne, addComment, getSummary, getMapIncidents, regeocode,
+  updateIncident, geocodeOne, setLocation, addComment, getSummary, getMapIncidents, regeocode,
   linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto,
   deleteIncident,

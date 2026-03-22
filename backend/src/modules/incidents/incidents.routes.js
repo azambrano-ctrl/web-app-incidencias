@@ -38,6 +38,18 @@ router.post('/:id/geocode', async (req, res, next) => {
   try { res.json(await svc.geocodeOne(req.params.id)); } catch (e) { next(e); }
 });
 
+// Fijar coordenadas manualmente (admin/supervisor)
+router.patch('/:id/location',
+  authorize('admin', 'supervisor'),
+  body('lat').isFloat({ min: -90, max: 90 }).withMessage('Latitud inválida'),
+  body('lng').isFloat({ min: -180, max: 180 }).withMessage('Longitud inválida'),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    try { res.json(await svc.setLocation(req.params.id, req.body.lat, req.body.lng)); } catch (e) { next(e); }
+  }
+);
+
 router.get('/:id', async (req, res, next) => {
   try { res.json(await svc.getIncident(req.params.id)); } catch (e) { next(e); }
 });
