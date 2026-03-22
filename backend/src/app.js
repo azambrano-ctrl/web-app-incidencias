@@ -20,7 +20,19 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 
 app.set('trust proxy', 1); // Railway / Vercel / Render usan proxy
-app.use(helmet());
+
+// Helmet: cabeceras de seguridad HTTP
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      connectSrc: ["'self'"],   // Solo el propio dominio puede hacer fetch
+    },
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Permite que el frontend (distinto dominio) reciba respuestas
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+}));
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   'http://localhost:5173',
@@ -36,7 +48,8 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(morgan('dev'));
+// Morgan: formato legible en dev, compacto en producción
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(cookieParser());
 app.use(express.json({ limit: '15mb' }));
 
@@ -81,7 +94,7 @@ app.use('/api/v1/checklists', checklistRoutes);
 app.use('/api/v1/maintenances', maintenanceRoutes);
 app.use('/api/v1/oncall', oncallRoutes);
 
-app.get('/api/v1/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
+app.get('/api/v1/health', (req, res) => res.json({ status: 'ok' }));
 
 app.use(errorHandler);
 

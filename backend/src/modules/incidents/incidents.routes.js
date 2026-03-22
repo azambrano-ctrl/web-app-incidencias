@@ -10,12 +10,12 @@ router.use(authenticate);
 const stripTags = (val) => typeof val === 'string' ? val.replace(/<[^>]*>/g, '').trim() : val;
 
 const incidentValidation = [
-  body('title').notEmpty().withMessage('Título requerido').customSanitizer(stripTags),
-  body('description').notEmpty().withMessage('Descripción requerida').customSanitizer(stripTags),
+  body('title').notEmpty().withMessage('Título requerido').isLength({ max: 200 }).withMessage('Título demasiado largo').customSanitizer(stripTags),
+  body('description').notEmpty().withMessage('Descripción requerida').isLength({ max: 5000 }).withMessage('Descripción demasiado larga').customSanitizer(stripTags),
   body('type').isIn(['internet', 'tv', 'both']).withMessage('Tipo inválido'),
   body('priority').optional().isIn(['low', 'medium', 'high', 'critical']),
-  body('client_name').notEmpty().withMessage('Nombre del cliente requerido').customSanitizer(stripTags),
-  body('client_address').notEmpty().withMessage('Dirección del cliente requerida').customSanitizer(stripTags),
+  body('client_name').notEmpty().withMessage('Nombre del cliente requerido').isLength({ max: 200 }).withMessage('Nombre demasiado largo').customSanitizer(stripTags),
+  body('client_address').notEmpty().withMessage('Dirección del cliente requerida').isLength({ max: 500 }).withMessage('Dirección demasiado larga').customSanitizer(stripTags),
 ];
 
 router.get('/', async (req, res, next) => {
@@ -106,7 +106,7 @@ router.patch('/:id/status',
 );
 
 router.post('/:id/comments',
-  body('body').notEmpty().withMessage('Comentario vacío').customSanitizer(stripTags),
+  body('body').notEmpty().withMessage('Comentario vacío').isLength({ max: 2000 }).withMessage('Comentario demasiado largo').customSanitizer(stripTags),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });

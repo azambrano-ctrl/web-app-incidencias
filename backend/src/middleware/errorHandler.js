@@ -1,9 +1,16 @@
 function errorHandler(err, req, res, next) {
-  console.error('[Error]', err.message);
   const status = err.status || 500;
-  res.status(status).json({
-    error: err.message || 'Error interno del servidor',
-  });
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  if (status >= 500) {
+    // En producción no exponer detalles internos (rutas de archivo, esquema de BD, etc.)
+    console.error('[Error]', err.stack || err.message);
+    return res.status(status).json({ error: 'Error interno del servidor' });
+  }
+
+  // Errores 4xx (validación, autorización) sí se devuelven al cliente
+  console.warn('[Warn]', err.message);
+  res.status(status).json({ error: err.message });
 }
 
 module.exports = { errorHandler };

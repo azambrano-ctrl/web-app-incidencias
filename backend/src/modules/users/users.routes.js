@@ -21,7 +21,7 @@ const passwordRule = body('password')
   .matches(/[0-9]/).withMessage('Debe contener al menos un número');
 
 router.post('/', authorize('admin'),
-  body('name').notEmpty(), body('email').isEmail(),
+  body('name').notEmpty().isLength({ max: 100 }), body('email').isEmail().isLength({ max: 254 }),
   passwordRule, body('role').isIn(['admin', 'supervisor', 'technician']),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -35,7 +35,7 @@ router.post('/', authorize('admin'),
 );
 
 router.put('/:id', authorize('admin'),
-  body('name').notEmpty(), body('email').isEmail(), body('role').isIn(['admin', 'supervisor', 'technician']),
+  body('name').notEmpty().isLength({ max: 100 }), body('email').isEmail().isLength({ max: 254 }), body('role').isIn(['admin', 'supervisor', 'technician']),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
