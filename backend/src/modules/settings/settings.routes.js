@@ -13,6 +13,7 @@ const SETTING_KEYS = [
   'push_enabled', 'push_vapid_public',
   'default_city',   // ciudad por defecto para geocodificación del mapa
   'map_bbox',       // bounding box para restringir geocodificación al área local (minLon,maxLat,maxLon,minLat)
+  'google_maps_key', // API key de Google Maps Geocoding (opcional, mejora precisión)
 ];
 
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {

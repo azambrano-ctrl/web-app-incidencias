@@ -57,6 +57,8 @@ export default function ConfigPage() {
   const [savingCity, setSavingCity] = useState(false);
   const [mapBbox, setMapBbox] = useState('');
   const [savingBbox, setSavingBbox] = useState(false);
+  const [googleMapsKey, setGoogleMapsKey] = useState('');
+  const [savingGoogleKey, setSavingGoogleKey] = useState(false);
 
   // Checklist templates
   const [showTemplateForm, setShowTemplateForm] = useState(false);
@@ -93,6 +95,7 @@ export default function ConfigPage() {
       if (s.escalation_hours) setEscalationHours(s.escalation_hours);
       if (s.default_city) setDefaultCity(s.default_city);
       if (s.map_bbox) setMapBbox(s.map_bbox);
+      if (s.google_maps_key) setGoogleMapsKey(s.google_maps_key);
     },
   });
 
@@ -228,6 +231,15 @@ export default function ConfigPage() {
       toast.success('Área del mapa guardada');
     } catch { toast.error('Error al guardar'); }
     finally { setSavingBbox(false); }
+  };
+
+  const handleSaveGoogleKey = async () => {
+    setSavingGoogleKey(true);
+    try {
+      await saveSettings({ google_maps_key: googleMapsKey });
+      toast.success('API key de Google Maps guardada');
+    } catch { toast.error('Error al guardar'); }
+    finally { setSavingGoogleKey(false); }
   };
 
   // ── Probar email ──
@@ -417,10 +429,40 @@ export default function ConfigPage() {
             <div className="card">
               <h3 style={{ marginBottom: 8 }}>🗺️ Geocodificación del mapa</h3>
               <p style={{ color: '#64748b', marginBottom: 16, fontSize: 14 }}>
-                Configura cómo se buscan las direcciones en el mapa. La <strong>ciudad por defecto</strong> se
-                anexa a cada dirección. El <strong>área del mapa</strong> restringe los resultados a tu zona
-                para evitar que aparezcan en otro lugar del mundo.
+                Configura cómo se buscan las direcciones en el mapa. Con la <strong>API key de Google Maps</strong> la
+                precisión mejora enormemente. Sin ella se usa OpenStreetMap como respaldo.
               </p>
+
+              {/* Google Maps API Key */}
+              <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#166534', margin: '0 0 4px' }}>
+                  ⭐ Google Maps Geocoding API (recomendado)
+                </p>
+                <p style={{ fontSize: 12, color: '#15803d', margin: '0 0 10px' }}>
+                  Mucho más preciso para direcciones locales de Ecuador. Gratis hasta ~40.000 búsquedas/mes.{' '}
+                  <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noreferrer" style={{ color: '#15803d', fontWeight: 600 }}>
+                    Obtener API key ↗
+                  </a>
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 260 }}>
+                    <span style={{ fontWeight: 600, whiteSpace: 'nowrap', fontSize: 13 }}>API Key:</span>
+                    <input
+                      type="password"
+                      value={googleMapsKey}
+                      onChange={e => setGoogleMapsKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}
+                    />
+                  </label>
+                  <button className="btn btn-primary btn-sm" onClick={handleSaveGoogleKey} disabled={savingGoogleKey}>
+                    {savingGoogleKey ? 'Guardando...' : 'Guardar key'}
+                  </button>
+                </div>
+                {googleMapsKey && (
+                  <p style={{ fontSize: 11, color: '#166534', margin: '6px 0 0' }}>✅ API key configurada — se usará Google Maps para geocodificar</p>
+                )}
+              </div>
 
               {/* Ciudad */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
