@@ -260,12 +260,6 @@ export default function IncidentsPage() {
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / filters.limit);
 
-  const isOverdue = (inc) => {
-    if (['resolved', 'cancelled'].includes(inc.status)) return false;
-    const last = new Date(inc.updated_at || inc.created_at);
-    return (Date.now() - last.getTime()) > 24 * 60 * 60 * 1000;
-  };
-  const overdueCount = incidents.filter(isOverdue).length;
   const escalatedCount = incidents.filter(inc => inc.escalated).length;
 
   return (
@@ -323,15 +317,6 @@ export default function IncidentsPage() {
             </div>
           </div>
 
-          {overdueCount > 0 && (
-            <div className="overdue-banner">
-              <span className="overdue-banner-icon">⚠️</span>
-              <span>
-                <strong>{overdueCount} incidencia{overdueCount > 1 ? 's' : ''}</strong> lleva{overdueCount > 1 ? 'n' : ''} más de 24 horas sin actividad
-              </span>
-            </div>
-          )}
-
           {escalatedCount > 0 && (
             <div className="overdue-banner" style={{ background: 'linear-gradient(135deg,#fef3c7,#fde68a)', borderColor: '#f59e0b', color: '#92400e' }}>
               <span className="overdue-banner-icon">🔺</span>
@@ -366,11 +351,10 @@ export default function IncidentsPage() {
                       <tr><td colSpan={10} className="table-empty">No hay incidencias</td></tr>
                     )}
                     {incidents.map(inc => (
-                      <tr key={inc.id} onClick={() => navigate(`/incidencias/${inc.id}`)} className={`table-row-click${isOverdue(inc) ? ' row-overdue' : ''}`}>
+                      <tr key={inc.id} onClick={() => navigate(`/incidencias/${inc.id}`)} className="table-row-click">
                         <td>
                           <code className="ticket">{inc.ticket_number}</code>
                           {inc.escalated && <span className="escalated-tag" title="Escalada">🔺</span>}
-                          {isOverdue(inc) && <span className="overdue-tag">⚠️ +24h</span>}
                           {parseInt(inc.children_count) > 0 && (
                             <span className="parent-tag" title={`${inc.children_count} sub-incidencias`}>🔗 {inc.children_count}</span>
                           )}
@@ -430,17 +414,14 @@ export default function IncidentsPage() {
                 {incidents.map(inc => (
                   <div
                     key={inc.id}
-                    className={`incident-card${isOverdue(inc) ? ' card-overdue' : ''}${inc.escalated ? ' card-escalated' : ''}`}
-                    style={{ borderLeftColor: inc.escalated ? '#f59e0b' : isOverdue(inc) ? '#ef4444' : STATUS_COLORS[inc.status] }}
+                    className={`incident-card${inc.escalated ? ' card-escalated' : ''}`}
+                    style={{ borderLeftColor: inc.escalated ? '#f59e0b' : STATUS_COLORS[inc.status] }}
                     onClick={() => navigate(`/incidencias/${inc.id}`)}
                   >
                     {inc.escalated && (
                       <div className="overdue-card-banner" style={{ background: '#fef3c7', color: '#92400e', borderBottom: '1px solid #fde68a' }}>
                         🔺 Incidencia escalada — requiere atención
                       </div>
-                    )}
-                    {isOverdue(inc) && !inc.escalated && (
-                      <div className="overdue-card-banner">⚠️ Sin actividad por más de 24 horas</div>
                     )}
                     <div className="incident-card-top">
                       <span className="incident-card-title">{inc.title}</span>

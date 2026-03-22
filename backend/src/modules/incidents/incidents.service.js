@@ -5,8 +5,10 @@ const { sendWhatsApp } = require('../../services/whatsapp.service');
 const { sendPush } = require('../../services/push.service');
 const { createExternalIncident } = require('../../services/external.service');
 const { geocodeAddress } = require('../../services/geocoding.service');
+const { addBusinessHours } = require('../../utils/businessHours');
 
-const SLA_HOURS = { critical: 2, high: 4, medium: 8, low: 24 };
+// Horas HÁBILES por prioridad (8:30–18:00, lun–sáb)
+const SLA_HOURS = { critical: 2, high: 4, medium: 8, low: 16 };
 
 let _io = null;
 function setIo(io) { _io = io; }
@@ -104,7 +106,8 @@ async function createIncident(data, createdBy) {
   const { title, description, type, priority = 'medium', client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to } = data;
 
   const slaHours = SLA_HOURS[priority] || 8;
-  const dueAt = data.due_at || new Date(Date.now() + slaHours * 3600000).toISOString();
+  // due_at en horas HÁBILES (8:30-18:00 lun-sáb, hora Ecuador)
+  const dueAt = data.due_at || addBusinessHours(new Date(), slaHours).toISOString();
 
   // Auto-asignar técnico de guardia si no hay técnico asignado y es fuera de horario
   let finalAssignedTo = assigned_to || null;
