@@ -285,18 +285,54 @@ async function changeStatus(id, newStatus, comment, changedBy, userRole, solutio
 
 async function updateIncident(id, data) {
   const db = getDb();
-  await getIncident(id);
+  const prev = await getIncident(id);
   const { title, description, type, priority, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to } = data;
+
+  // Si la dirección cambió, limpiar coords para forzar re-geocodificación
+  const addressChanged = client_address && client_address !== prev.client_address;
+
   await db.query(`
     UPDATE incidents SET title=$1, description=$2, type=$3, priority=$4,
-      client_name=$5, client_address=$6, client_phone=$7, client_phone2=$8, client_identificacion=$9, assigned_to=$10, updated_at=NOW()
+      client_name=$5, client_address=$6, client_phone=$7, client_phone2=$8, client_identificacion=$9, assigned_to=$10,
+      ${addressChanged ? 'latitude=NULL, longitude=NULL,' : ''}
+      updated_at=NOW()
     WHERE id=$11
   `, [title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, id]);
+
+  // Re-geocodificar si la dirección cambió o si no tenía coords
+  if (addressChanged || (!prev.latitude && client_address)) {
+    geocodeAddress(client_address).then(coords => {
+      if (coords) {
+        db.query(`UPDATE incidents SET latitude=$1, longitude=$2 WHERE id=$3`, [coords.lat, coords.lng, id])
+          .catch(e => console.error('[Geocode] updateIncident error:', e.message));
+        console.log(`[Geocode] updateIncident ${id}: ${coords.lat},${coords.lng}`);
+      } else {
+        console.warn(`[Geocode] updateIncident ${id}: no coords for "${client_address}"`);
+      }
+    }).catch(() => {});
+  }
+
   const updated = await getIncident(id);
   emit('incident:updated', 'role:admin', { incident: updated });
   emit('incident:updated', 'role:supervisor', { incident: updated });
   if (updated.assigned_to) emit('incident:updated', `user:${updated.assigned_to}`, { incident: updated });
   return updated;
+}
+
+// Re-geocodificar una sola incidencia por ID
+async function geocodeOne(id) {
+  const db = getDb();
+  const inc = await getIncident(id);
+  if (!inc.client_address) throw new Error('La incidencia no tiene dirección');
+  console.log(`[Geocode] geocodeOne ${inc.ticket_number}: "${inc.client_address}"`);
+  const coords = await geocodeAddress(inc.client_address);
+  if (coords) {
+    await db.query(`UPDATE incidents SET latitude=$1, longitude=$2 WHERE id=$3`, [coords.lat, coords.lng, id]);
+    console.log(`[Geocode] geocodeOne OK: ${coords.lat},${coords.lng}`);
+    return { success: true, lat: coords.lat, lng: coords.lng };
+  }
+  console.warn(`[Geocode] geocodeOne sin resultado para "${inc.client_address}"`);
+  return { success: false, address: inc.client_address };
 }
 
 async function addComment(incidentId, userId, body) {
@@ -455,7 +491,7 @@ async function deleteIncident(id, deletedBy) {
 
 module.exports = {
   setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus,
-  updateIncident, addComment, getSummary, getMapIncidents, regeocode,
+  updateIncident, geocodeOne, addComment, getSummary, getMapIncidents, regeocode,
   linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto,
   deleteIncident,

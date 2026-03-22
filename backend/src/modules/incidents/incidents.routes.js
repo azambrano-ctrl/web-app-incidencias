@@ -33,6 +33,11 @@ router.post('/map/regeocode', authorize('admin', 'supervisor'), async (req, res,
   try { res.json(await svc.regeocode()); } catch (e) { next(e); }
 });
 
+// Re-geocodificar una incidencia específica
+router.post('/:id/geocode', async (req, res, next) => {
+  try { res.json(await svc.geocodeOne(req.params.id)); } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try { res.json(await svc.getIncident(req.params.id)); } catch (e) { next(e); }
 });

@@ -21,6 +21,7 @@ import { SLABadge } from '../components/incidents/SLABadge';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { TYPE_LABELS, STATUS_TRANSITIONS, STATUS_LABELS } from '../utils/constants';
 import { downloadIncidentPDF } from '../utils/incidentPdf';
+import { geocodeIncident } from '../api/incidents.api';
 import { toast } from 'react-hot-toast';
 
 export default function IncidentDetailPage() {
@@ -34,6 +35,7 @@ export default function IncidentDetailPage() {
   const photoInputRef = useRef(null);
 
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
   const [comment, setComment] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -490,8 +492,44 @@ export default function IncidentDetailPage() {
                 <h3>Datos del cliente</h3>
                 <div className="client-info">
                   <div><strong>Nombre:</strong> {inc.client_name}</div>
-                  <div><strong>Dirección:</strong> {inc.client_address}</div>
-                  {inc.client_phone && <div><strong>Teléfono:</strong> {inc.client_phone}</div>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span><strong>Dirección:</strong> {inc.client_address}</span>
+                    {/* Estado de geocodificación */}
+                    {inc.latitude && inc.longitude
+                      ? <span title={`Coords: ${Number(inc.latitude).toFixed(5)}, ${Number(inc.longitude).toFixed(5)}`}
+                          style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>📍 En mapa</span>
+                      : <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>📍 Sin ubicación</span>
+                    }
+                    {/* Botón re-geocodificar (solo si tiene dirección) */}
+                    {inc.client_address && (
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        disabled={geocoding}
+                        title="Obtener coordenadas desde la dirección"
+                        onClick={async () => {
+                          setGeocoding(true);
+                          try {
+                            const r = await geocodeIncident(inc.id);
+                            if (r.success) {
+                              toast.success('✅ Ubicación encontrada — ya aparece en el mapa');
+                              refetch();
+                            } else {
+                              toast.error(`No se encontraron coords para "${r.address}". Verifica la dirección.`);
+                            }
+                          } catch {
+                            toast.error('Error al geocodificar');
+                          } finally {
+                            setGeocoding(false);
+                          }
+                        }}
+                        style={{ fontSize: 11, padding: '2px 8px' }}
+                      >
+                        {geocoding ? '⏳' : '🔄'} {geocoding ? 'Buscando...' : 'Ubicar'}
+                      </button>
+                    )}
+                  </div>
+                  {inc.client_phone  && <div><strong>Teléfono:</strong> {inc.client_phone}</div>}
+                  {inc.client_phone2 && <div><strong>Teléfono 2:</strong> {inc.client_phone2}</div>}
                 </div>
               </div>
 

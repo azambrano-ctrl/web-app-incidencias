@@ -52,3 +52,6 @@ export const deleteIncident = (id) =>
 
 export const regeocodeIncidents = () =>
   api.post('/incidents/map/regeocode').then(r => r.data);
+
+export const geocodeIncident = (id) =>
+  api.post(`/incidents/${id}/geocode`).then(r => r.data);
