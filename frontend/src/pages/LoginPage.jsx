@@ -16,8 +16,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { token } = await login(email, password);
-      loginUser(token);
+      const { user } = await login(email, password);
+      loginUser(user);
       const next = searchParams.get('next');
       navigate(next && next.startsWith('/') ? next : '/');
     } catch (err) {

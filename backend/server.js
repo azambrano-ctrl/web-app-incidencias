@@ -13,6 +13,16 @@ const { setIo: setIncidentsIo } = require('./src/modules/incidents/incidents.ser
 const PORT = process.env.PORT || 3001;
 
 async function main() {
+  // 0. Validar JWT_SECRET antes de arrancar
+  const INSECURE = ['cambia_esto_por_una_cadena_secreta_larga', 'secret', 'jwt_secret', ''];
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32 || INSECURE.includes(process.env.JWT_SECRET)) {
+    console.error('\n❌ SEGURIDAD: JWT_SECRET no configurado o es el valor de ejemplo.');
+    console.error('   Genera uno seguro con:');
+    console.error('   node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
+    console.error('   Luego agrégalo en las variables de entorno de Railway.\n');
+    process.exit(1);
+  }
+
   // 1. Inicializar base de datos
   initDb();
 
@@ -37,11 +47,7 @@ async function main() {
   server.listen(PORT, () => {
     console.log(`\n🚀 Servidor corriendo en http://localhost:${PORT}`);
     console.log(`📡 Socket.io activo`);
-    console.log(`🗄️  Base de datos: Supabase (PostgreSQL)`);
-    console.log(`\nUsuarios de prueba:`);
-    console.log(`  Admin:      admin@incidencias.com / admin123`);
-    console.log(`  Supervisor: supervisor@incidencias.com / supervisor123`);
-    console.log(`  Técnico:    tecnico@incidencias.com / tecnico123\n`);
+    console.log(`🗄️  Base de datos: Supabase (PostgreSQL)\n`);
   });
 }
 

@@ -1,23 +1,28 @@
 import { createContext, useContext, useState, useCallback } from 'react';
-import { jwtDecode } from 'jwt-decode';
+import api from '../api/axios';
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return null;
-    try { return jwtDecode(token); }
-    catch { localStorage.removeItem('token'); return null; }
-  });
+// Solo guardamos info del usuario (nombre, rol) — nunca el token
+// El token JWT vive en cookie httpOnly: JS no puede leerlo ni robarlo
+function loadUser() {
+  try {
+    const raw = sessionStorage.getItem('user_info');
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
-  const loginUser = useCallback((token) => {
-    localStorage.setItem('token', token);
-    setUser(jwtDecode(token));
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(loadUser);
+
+  const loginUser = useCallback((userInfo) => {
+    sessionStorage.setItem('user_info', JSON.stringify(userInfo));
+    setUser(userInfo);
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('token');
+  const logout = useCallback(async () => {
+    try { await api.post('/auth/logout'); } catch { /* ignorar */ }
+    sessionStorage.removeItem('user_info');
     setUser(null);
   }, []);
 

@@ -1,26 +1,33 @@
 const bcrypt = require('bcryptjs');
 const { getDb } = require('../../config/database');
 
+function generatePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+  let p = '';
+  for (let i = 0; i < 16; i++) p += chars[Math.floor(Math.random() * chars.length)];
+  return p;
+}
+
 async function runSeeds() {
   const db = getDb();
   const { rows } = await db.query('SELECT COUNT(*) as c FROM users');
-  if (parseInt(rows[0].c) > 0) return;
+  if (parseInt(rows[0].c) > 0) return; // ya hay usuarios, no sobrescribir
 
-  const hash  = bcrypt.hashSync('admin123', 10);
-  const hash2 = bcrypt.hashSync('supervisor123', 10);
-  const hash3 = bcrypt.hashSync('tecnico123', 10);
+  // Usar contraseña de env si existe, sino generar una aleatoria segura
+  const adminPass = process.env.INITIAL_ADMIN_PASSWORD || generatePassword();
+  const hash = bcrypt.hashSync(adminPass, 10);
 
   await db.query(
-    `INSERT INTO users (name, email, password, role, phone) VALUES
-     ($1,$2,$3,$4,$5), ($6,$7,$8,$9,$10), ($11,$12,$13,$14,$15)`,
-    [
-      'Administrador','admin@incidencias.com',hash,'admin','00000000',
-      'Supervisor','supervisor@incidencias.com',hash2,'supervisor','11111111',
-      'Técnico Demo','tecnico@incidencias.com',hash3,'technician','22222222',
-    ]
+    `INSERT INTO users (name, email, password, role, phone) VALUES ($1,$2,$3,$4,$5)`,
+    ['Administrador', 'admin@incidencias.com', hash, 'admin', '00000000']
   );
 
-  console.log('[SEED] Usuarios iniciales creados.');
+  console.log('\n========================================');
+  console.log('  ✅ USUARIO ADMIN CREADO (primer inicio)');
+  console.log('  Email:    admin@incidencias.com');
+  console.log(`  Password: ${adminPass}`);
+  console.log('  ⚠️  Cambia esta contraseña inmediatamente');
+  console.log('========================================\n');
 }
 
 module.exports = { runSeeds };
