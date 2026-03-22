@@ -113,6 +113,40 @@ function startReminderJob() {
         }
       }
 
+      // ── Notificaciones de mantenimientos programados ──────────────────────
+      // Notificar 1 hora antes al técnico de guardia y a admins/supervisores
+      const { rows: upcoming } = await db.query(`
+        SELECT m.*, u.name as created_by_name
+        FROM maintenances m
+        JOIN users u ON u.id = m.created_by
+        WHERE m.status = 'scheduled'
+          AND m.notify_clients = TRUE
+          AND m.notified_at IS NULL
+          AND m.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '1 hour'
+      `);
+
+      for (const maint of upcoming) {
+        const start = new Date(maint.scheduled_at).toLocaleString('es-EC', { timeZone: 'America/Guayaquil' });
+        const duration = maint.estimated_duration_min >= 60
+          ? `${Math.round(maint.estimated_duration_min / 60)}h`
+          : `${maint.estimated_duration_min}min`;
+        const msg = `🔧 MANTENIMIENTO PROGRAMADO: "${maint.title}" iniciará el ${start} (duración aprox. ${duration})${maint.zone ? ` — Zona: ${maint.zone}` : ''}`;
+
+        // Notificar a admins y supervisores
+        const { rows: staff } = await db.query(
+          `SELECT id FROM users WHERE role IN ('admin','supervisor') AND active=1`
+        );
+        for (const s of staff) {
+          const notif = await createNotification(s.id, 'maintenance', msg, null);
+          if (_io) _io.to(`user:${s.id}`).emit('notification:new', notif);
+          sendPush(s.id, { title: 'Mantenimiento próximo', body: msg }).catch(err => console.error('[Cron] Push maint error:', err.message));
+        }
+
+        // Marcar como notificado
+        await db.query(`UPDATE maintenances SET notified_at=NOW() WHERE id=$1`, [maint.id]);
+        console.log(`[Cron] Mantenimiento notificado: ${maint.title}`);
+      }
+
     } catch (err) {
       console.error('[Cron] Error:', err.message);
     }

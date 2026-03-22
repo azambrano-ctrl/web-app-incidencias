@@ -8,6 +8,8 @@ export default function Sidebar() {
     { to: '/', label: '📊 Dashboard', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/incidencias', label: '🎫 Incidencias', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/mapa', label: '🗺️ Mapa', roles: ['admin', 'supervisor', 'technician'] },
+    { to: '/mantenimientos', label: '🔧 Mantenimientos', roles: ['admin', 'supervisor'] },
+    { to: '/guardia', label: '🛡️ Guardia', roles: ['admin', 'supervisor'] },
     { to: '/usuarios', label: '👥 Usuarios', roles: ['admin'] },
     { to: '/reportes', label: '📈 Reportes', roles: ['admin', 'supervisor'] },
     { to: '/configuracion', label: '⚙️ Configuración', roles: ['admin'] },

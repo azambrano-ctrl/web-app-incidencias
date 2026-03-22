@@ -12,6 +12,8 @@ const notificationRoutes = require('./modules/notifications/notifications.routes
 const clientRoutes = require('./modules/clients/clients.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
 const checklistRoutes = require('./modules/checklists/checklists.routes');
+const maintenanceRoutes = require('./modules/maintenances/maintenances.routes');
+const oncallRoutes = require('./modules/oncall/oncall.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -25,7 +27,7 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -51,6 +53,8 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/clients', clientRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/checklists', checklistRoutes);
+app.use('/api/v1/maintenances', maintenanceRoutes);
+app.use('/api/v1/oncall', oncallRoutes);
 
 app.get('/api/v1/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 

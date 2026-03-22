@@ -106,12 +106,29 @@ async function createIncident(data, createdBy) {
   const slaHours = SLA_HOURS[priority] || 8;
   const dueAt = data.due_at || new Date(Date.now() + slaHours * 3600000).toISOString();
 
-  const initialStatus = assigned_to ? 'assigned' : 'open';
+  // Auto-asignar técnico de guardia si no hay técnico asignado y es fuera de horario
+  let finalAssignedTo = assigned_to || null;
+  if (!finalAssignedTo) {
+    const nowEC = new Date(Date.now() - 5 * 3600000); // UTC-5 Ecuador
+    const hour = nowEC.getUTCHours();
+    const dow  = nowEC.getUTCDay(); // 0=Dom, 6=Sab
+    const isOutsideHours = hour < 8 || hour >= 18 || dow === 0 || dow === 6;
+    if (isOutsideHours) {
+      const { rows: oncall } = await db.query(`
+        SELECT user_id FROM oncall_schedules
+        WHERE CURRENT_DATE BETWEEN start_date AND end_date
+        ORDER BY created_at DESC LIMIT 1
+      `);
+      if (oncall[0]) finalAssignedTo = oncall[0].user_id;
+    }
+  }
+
+  const initialStatus = finalAssignedTo ? 'assigned' : 'open';
 
   const { rows } = await db.query(`
     INSERT INTO incidents (ticket_number, title, description, type, priority, status, client_name, client_address, client_phone, client_phone2, client_identificacion, assigned_to, created_by, due_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id
-  `, [ticket, title, description, type, priority, initialStatus, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, createdBy, dueAt]);
+  `, [ticket, title, description, type, priority, initialStatus, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, finalAssignedTo, createdBy, dueAt]);
 
   const inc = await getIncident(rows[0].id);
 
