@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { getIncidents, createIncident, assignIncident, deleteIncident } from '../api/incidents.api';
 import { getUsers } from '../api/users.api';
 import { useAuth } from '../context/AuthContext';
@@ -11,8 +13,151 @@ import BottomNav from '../components/layout/BottomNav';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { StatusBadge, PriorityBadge } from '../components/incidents/StatusBadge';
 import { SLABadge } from '../components/incidents/SLABadge';
-import { TYPE_LABELS, STATUS_LABELS, STATUS_COLORS, PRIORITY_COLORS } from '../utils/constants';
+import { TYPE_LABELS, STATUS_LABELS, STATUS_COLORS, PRIORITY_LABELS, PRIORITY_COLORS } from '../utils/constants';
 import { toast } from 'react-hot-toast';
+
+const PRIMARY = [37, 99, 235];
+const GRAY    = [100, 116, 139];
+const DARK    = [30, 41, 59];
+
+const PRIORITY_COLOR_MAP = {
+  critical: [239, 68, 68],
+  high:     [249, 115, 22],
+  medium:   [234, 179, 8],
+  low:      [34, 197, 94],
+};
+const STATUS_COLOR_MAP = {
+  open:        [59, 130, 246],
+  assigned:    [99, 102, 241],
+  in_progress: [245, 158, 11],
+  resolved:    [34, 197, 94],
+  cancelled:   [156, 163, 175],
+  closed:      [107, 114, 128],
+};
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function fmtSLA(dueAt, status) {
+  if (!dueAt) return '—';
+  if (['resolved', 'cancelled', 'closed'].includes(status)) return 'Cerrada';
+  const diff = new Date(dueAt) - Date.now();
+  if (diff < 0) return '⚠ Vencida';
+  const h = Math.floor(diff / 3600000);
+  if (h < 24) return `${h}h restantes`;
+  return `${Math.floor(h / 24)}d restantes`;
+}
+
+async function exportAllToPDF({ filters, userName }) {
+  toast('Preparando PDF...', { icon: '⏳' });
+  // Fetch all incidents with current filters but no pagination limit
+  const result = await getIncidents({ ...filters, page: 1, limit: 9999 });
+  const all = result?.data || [];
+
+  if (all.length === 0) { toast.error('No hay incidencias para exportar'); return; }
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+
+  // Header
+  doc.setFillColor(...PRIMARY);
+  doc.rect(0, 0, W, 24, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('📡 IncidenciasISP — Listado de incidencias', 14, 10);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+
+  // Active filters summary
+  const activeFilters = [];
+  if (filters.status)      activeFilters.push(`Estado: ${STATUS_LABELS[filters.status] || filters.status}`);
+  if (filters.priority)    activeFilters.push(`Prioridad: ${PRIORITY_LABELS[filters.priority] || filters.priority}`);
+  if (filters.type)        activeFilters.push(`Servicio: ${TYPE_LABELS[filters.type] || filters.type}`);
+  if (filters.assigned_to) activeFilters.push('Filtro por técnico activo');
+  const filterStr = activeFilters.length ? `Filtros: ${activeFilters.join(' · ')}` : 'Todos los registros';
+  doc.text(`${filterStr}   ·   Total: ${all.length} incidencias   ·   Generado por: ${userName}`, 14, 17);
+
+  const now = new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  doc.text(now, W - 14, 17, { align: 'right' });
+
+  // Table
+  autoTable(doc, {
+    startY: 28,
+    margin: { left: 10, right: 10 },
+    styles: { fontSize: 8, cellPadding: 2.5, textColor: DARK, overflow: 'ellipsize' },
+    headStyles: { fillColor: PRIMARY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    head: [[
+      'Ticket', 'Título', 'Servicio', 'Prioridad', 'Estado', 'SLA',
+      'Técnico', 'Cliente', 'Dirección', 'Creada',
+    ]],
+    body: all.map(inc => [
+      inc.ticket_number + (inc.escalated ? ' 🔺' : ''),
+      inc.title,
+      TYPE_LABELS[inc.type] || inc.type,
+      PRIORITY_LABELS[inc.priority] || inc.priority,
+      STATUS_LABELS[inc.status]   || inc.status,
+      fmtSLA(inc.due_at, inc.status),
+      inc.assigned_name || 'Sin asignar',
+      inc.client_name   || '—',
+      inc.address       || '—',
+      fmtDate(inc.created_at),
+    ]),
+    columnStyles: {
+      0: { cellWidth: 22, fontStyle: 'bold' },
+      1: { cellWidth: 50 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 20 },
+      4: { cellWidth: 22 },
+      5: { cellWidth: 24 },
+      6: { cellWidth: 28 },
+      7: { cellWidth: 28 },
+      8: { cellWidth: 42 },
+      9: { cellWidth: 22 },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body') {
+        // Color prioridad
+        if (data.column.index === 3) {
+          const inc = all[data.row.index];
+          const rgb = PRIORITY_COLOR_MAP[inc?.priority];
+          if (rgb) { data.cell.styles.textColor = rgb; data.cell.styles.fontStyle = 'bold'; }
+        }
+        // Color estado
+        if (data.column.index === 4) {
+          const inc = all[data.row.index];
+          const rgb = STATUS_COLOR_MAP[inc?.status];
+          if (rgb) { data.cell.styles.textColor = rgb; data.cell.styles.fontStyle = 'bold'; }
+        }
+        // Rojo SLA vencida
+        if (data.column.index === 5 && data.cell.text[0]?.startsWith('⚠')) {
+          data.cell.styles.textColor = [239, 68, 68];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
+  });
+
+  // Footer
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(...GRAY);
+    doc.setFont('helvetica', 'normal');
+    doc.text('IncidenciasISP — Documento generado automáticamente', 10, 205);
+    doc.text(`Página ${i} de ${pages}`, W - 10, 205, { align: 'right' });
+    doc.setDrawColor(226, 232, 240);
+    doc.line(10, 203, W - 10, 203);
+  }
+
+  const filename = `incidencias-${new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(filename);
+  toast.success(`PDF generado — ${all.length} incidencias`);
+}
 
 export default function IncidentsPage() {
   const { user } = useAuth();
@@ -24,6 +169,7 @@ export default function IncidentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [assignModal, setAssignModal] = useState(null);
   const [selectedTech, setSelectedTech] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['incidents', filters],
@@ -130,9 +276,24 @@ export default function IncidentsPage() {
                 </select>
               )}
             </div>
-            {['admin', 'supervisor'].includes(user?.role) && (
-              <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nueva Incidencia</button>
-            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn-secondary"
+                disabled={pdfLoading}
+                onClick={async () => {
+                  setPdfLoading(true);
+                  try { await exportAllToPDF({ filters, userName: user?.name }); }
+                  catch { toast.error('Error al generar PDF'); }
+                  finally { setPdfLoading(false); }
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                {pdfLoading ? '⏳ Generando...' : '📄 Exportar PDF'}
+              </button>
+              {['admin', 'supervisor'].includes(user?.role) && (
+                <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nueva Incidencia</button>
+              )}
+            </div>
           </div>
 
           {overdueCount > 0 && (
