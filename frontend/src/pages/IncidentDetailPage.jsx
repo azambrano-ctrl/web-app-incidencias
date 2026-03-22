@@ -20,6 +20,7 @@ import { StatusBadge, PriorityBadge } from '../components/incidents/StatusBadge'
 import { SLABadge } from '../components/incidents/SLABadge';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { TYPE_LABELS, STATUS_TRANSITIONS, STATUS_LABELS } from '../utils/constants';
+import { downloadIncidentPDF } from '../utils/incidentPdf';
 import { toast } from 'react-hot-toast';
 
 export default function IncidentDetailPage() {
@@ -32,6 +33,7 @@ export default function IncidentDetailPage() {
   const sigRef = useRef(null);
   const photoInputRef = useRef(null);
 
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [comment, setComment] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -242,8 +244,20 @@ export default function IncidentDetailPage() {
       <main className="main-content">
         <Topbar title={inc.ticket_number} />
         <div className="page-body">
-          <div className="detail-back">
+          <div className="detail-back" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button className="btn btn-sm btn-secondary" onClick={() => navigate('/incidencias')}>← Volver</button>
+            <button
+              className="btn btn-sm btn-secondary"
+              disabled={pdfLoading}
+              onClick={() => {
+                setPdfLoading(true);
+                try { downloadIncidentPDF({ inc, checklist, userName: user?.name }); }
+                finally { setTimeout(() => setPdfLoading(false), 800); }
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              {pdfLoading ? '⏳ Generando...' : '📄 Descargar PDF'}
+            </button>
           </div>
 
           {/* Escalation banner */}
