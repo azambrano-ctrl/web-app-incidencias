@@ -17,8 +17,14 @@ function emit(event, room, data) { if (_io) _io.to(room).emit(event, data); }
 async function generateTicket() {
   const db = getDb();
   const year = new Date().getFullYear();
-  const { rows } = await db.query(`SELECT COUNT(*) as c FROM incidents WHERE ticket_number LIKE $1`, [`INC-${year}-%`]);
-  const num = String(parseInt(rows[0].c) + 1).padStart(5, '0');
+  // Usar MAX en lugar de COUNT para evitar duplicados cuando hay incidencias eliminadas
+  const { rows } = await db.query(
+    `SELECT MAX(CAST(SPLIT_PART(ticket_number, '-', 3) AS INTEGER)) AS max_num
+     FROM incidents WHERE ticket_number LIKE $1`,
+    [`INC-${year}-%`]
+  );
+  const maxNum = parseInt(rows[0].max_num) || 0;
+  const num = String(maxNum + 1).padStart(5, '0');
   return `INC-${year}-${num}`;
 }
 

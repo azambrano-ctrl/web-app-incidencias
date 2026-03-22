@@ -916,96 +916,80 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const markerRef    = useRef(null);
+  const leafletRef   = useRef(null); // guarda L para usarlo fuera del useEffect
+
   const [picked, setPicked] = useState(
     inc.latitude && inc.longitude
       ? { lat: parseFloat(inc.latitude), lng: parseFloat(inc.longitude) }
       : null
   );
-  // Entrada manual de coordenadas
-  const [manualLat, setManualLat] = useState(inc.latitude  ? String(parseFloat(inc.latitude).toFixed(6))  : '');
-  const [manualLng, setManualLng] = useState(inc.longitude ? String(parseFloat(inc.longitude).toFixed(6)) : '');
+  const [manualLat, setManualLat] = useState(inc.latitude  ? parseFloat(inc.latitude).toFixed(6)  : '');
+  const [manualLng, setManualLng] = useState(inc.longitude ? parseFloat(inc.longitude).toFixed(6) : '');
   const [manualErr, setManualErr] = useState('');
 
-  // Mover marcador y mapa a unas coords dadas
-  function applyCoords(lat, lng, L) {
+  // Coloca o mueve el marcador; siempre funciona si el mapa ya está listo
+  const placeMarker = (lat, lng) => {
+    const L   = leafletRef.current;
     const map = mapRef.current;
-    if (!map) return;
+    if (!L || !map) return;
+
     if (markerRef.current) {
       markerRef.current.setLatLng([lat, lng]);
     } else {
-      markerRef.current = L
-        ? L.marker([lat, lng], { draggable: true }).addTo(map)
-        : null;
-      if (markerRef.current) {
-        markerRef.current.on('dragend', () => {
-          const p = markerRef.current.getLatLng();
-          setPicked({ lat: p.lat, lng: p.lng });
-          setManualLat(p.lat.toFixed(6));
-          setManualLng(p.lng.toFixed(6));
-        });
-      }
+      markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+      markerRef.current.on('dragend', () => {
+        const p = markerRef.current.getLatLng();
+        setPicked({ lat: p.lat, lng: p.lng });
+        setManualLat(p.lat.toFixed(6));
+        setManualLng(p.lng.toFixed(6));
+      });
     }
-    map.setView([lat, lng], 17);
+    map.setView([lat, lng], map.getZoom() < 15 ? 16 : map.getZoom());
     setPicked({ lat, lng });
-  }
+  };
 
-  // Validar y aplicar coordenadas manuales
-  function handleManualApply() {
-    const lat = parseFloat(manualLat.replace(',', '.'));
-    const lng = parseFloat(manualLng.replace(',', '.'));
-    if (isNaN(lat) || lat < -90  || lat > 90)  { setManualErr('Latitud inválida (ej: -2.419400)');  return; }
+  // Aplicar coordenadas escritas manualmente
+  const handleManualApply = () => {
+    const lat = parseFloat(String(manualLat).replace(',', '.'));
+    const lng = parseFloat(String(manualLng).replace(',', '.'));
+    if (isNaN(lat) || lat < -90  || lat > 90)  { setManualErr('Latitud inválida  (ej: -2.419400)');  return; }
     if (isNaN(lng) || lng < -180 || lng > 180) { setManualErr('Longitud inválida (ej: -79.343000)'); return; }
     setManualErr('');
     setManualLat(lat.toFixed(6));
     setManualLng(lng.toFixed(6));
-    applyCoords(lat, lng, null);
-    setPicked({ lat, lng });
-  }
+    placeMarker(lat, lng);
+  };
 
-  // Inicializar Leaflet con delay para que el modal esté visible
+  // Inicializar Leaflet después de que el modal esté pintado
   useEffect(() => {
     let destroyed = false;
-    let leafletLib = null;
 
     const timer = setTimeout(() => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || destroyed) return;
 
-      Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]).then(([{ default: L }]) => {
-        if (destroyed || mapRef.current) return;
-        leafletLib = L;
+      Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')])
+        .then(([{ default: L }]) => {
+          if (destroyed || mapRef.current) return;
 
-        const initLat = inc.latitude  ? parseFloat(inc.latitude)  : -2.4194;
-        const initLng = inc.longitude ? parseFloat(inc.longitude) : -79.3430;
-        const zoom    = inc.latitude  ? 16 : 14;
+          leafletRef.current = L; // guardar referencia global del componente
 
-        const map = L.map(containerRef.current, { zoomControl: true }).setView([initLat, initLng], zoom);
-        mapRef.current = map;
+          const initLat = inc.latitude  ? parseFloat(inc.latitude)  : -2.4194;
+          const initLng = inc.longitude ? parseFloat(inc.longitude) : -79.3430;
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap',
-        }).addTo(map);
+          const map = L.map(containerRef.current, { zoomControl: true })
+                       .setView([initLat, initLng], inc.latitude ? 16 : 14);
+          mapRef.current = map;
 
-        // Forzar redibujado tras renderizado del modal
-        setTimeout(() => map.invalidateSize(), 50);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+          }).addTo(map);
 
-        // Marcador inicial si ya tiene coords
-        if (inc.latitude && inc.longitude) {
-          markerRef.current = L.marker([initLat, initLng], { draggable: true }).addTo(map);
-          markerRef.current.on('dragend', () => {
-            const p = markerRef.current.getLatLng();
-            setPicked({ lat: p.lat, lng: p.lng });
-            setManualLat(p.lat.toFixed(6));
-            setManualLng(p.lng.toFixed(6));
-          });
-        }
+          // Forzar redibujado correcto del mapa dentro del modal
+          setTimeout(() => map.invalidateSize(), 100);
 
-        // Click en mapa = colocar/mover marcador
-        map.on('click', (e) => {
-          const { lat, lng } = e.latlng;
-          if (markerRef.current) {
-            markerRef.current.setLatLng([lat, lng]);
-          } else {
-            markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+          // Marcador inicial si la incidencia ya tiene coordenadas
+          if (inc.latitude && inc.longitude) {
+            markerRef.current = L.marker([initLat, initLng], { draggable: true }).addTo(map);
             markerRef.current.on('dragend', () => {
               const p = markerRef.current.getLatLng();
               setPicked({ lat: p.lat, lng: p.lng });
@@ -1013,25 +997,48 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
               setManualLng(p.lng.toFixed(6));
             });
           }
-          setPicked({ lat, lng });
-          setManualLat(lat.toFixed(6));
-          setManualLng(lng.toFixed(6));
-        });
-      }).catch(() => {});
-    }, 120); // esperar que el modal esté pintado en pantalla
+
+          // Clic en mapa → colocar o mover marcador
+          map.on('click', (e) => {
+            const { lat, lng } = e.latlng;
+            if (markerRef.current) {
+              markerRef.current.setLatLng([lat, lng]);
+            } else {
+              markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+              markerRef.current.on('dragend', () => {
+                const p = markerRef.current.getLatLng();
+                setPicked({ lat: p.lat, lng: p.lng });
+                setManualLat(p.lat.toFixed(6));
+                setManualLng(p.lng.toFixed(6));
+              });
+            }
+            setPicked({ lat, lng });
+            setManualLat(lat.toFixed(6));
+            setManualLng(lng.toFixed(6));
+          });
+        })
+        .catch(() => {});
+    }, 150);
 
     return () => {
       destroyed = true;
       clearTimeout(timer);
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; markerRef.current = null; }
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current   = null;
+        markerRef.current = null;
+        leafletRef.current = null;
+      }
     };
   }, []);
 
-  const gmapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(inc.client_address || 'La Troncal, Ecuador')}`;
+  const gmapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(
+    (inc.client_address || '') + ', La Troncal, Ecuador'
+  )}`;
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 660, width: '95vw' }}>
+      <div className="modal" style={{ maxWidth: 660, width: '95vw' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3 style={{ margin: 0 }}>📍 Fijar ubicación</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>×</button>
@@ -1039,48 +1046,43 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
 
         <div className="modal-body" style={{ padding: '12px 16px 0' }}>
 
-          {/* ── Opción A: mapa interactivo ── */}
+          {/* Opción A: clic en el mapa */}
           <p style={{ fontSize: 13, color: '#374151', marginBottom: 6, fontWeight: 600 }}>
-            Opción A — Haz clic en el mapa para colocar el pin:
+            Opción A — Toca / haz clic en el mapa para colocar el pin:
           </p>
-          <div ref={containerRef} style={{ height: 320, width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }} />
+          <div
+            ref={containerRef}
+            style={{ height: 300, width: '100%', borderRadius: 8, border: '1px solid #e2e8f0' }}
+          />
+          {picked
+            ? <p style={{ fontSize: 11, color: '#22c55e', margin: '4px 0 8px', fontFamily: 'monospace', fontWeight: 600 }}>
+                📌 {picked.lat.toFixed(6)}, {picked.lng.toFixed(6)}
+              </p>
+            : <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 8px' }}>Haz clic en el mapa para fijar el punto</p>
+          }
 
-          {picked && (
-            <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 12px', fontFamily: 'monospace' }}>
-              📌 {picked.lat.toFixed(6)}, {picked.lng.toFixed(6)}
-            </p>
-          )}
+          <hr style={{ margin: '8px 0 12px', borderColor: '#e2e8f0' }} />
 
-          <hr style={{ margin: '12px 0', borderColor: '#e2e8f0' }} />
-
-          {/* ── Opción B: pegar coords de Google Maps ── */}
+          {/* Opción B: pegar coords de Google Maps */}
           <p style={{ fontSize: 13, color: '#374151', marginBottom: 6, fontWeight: 600 }}>
-            Opción B — Pega las coordenadas desde{' '}
+            Opción B — Pega coordenadas de{' '}
             <a href={gmapsUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>
               Google Maps ↗
             </a>
             <span style={{ fontWeight: 400, color: '#64748b', fontSize: 12 }}>
-              {' '}(clic derecho sobre el punto → copiar coordenadas)
+              {' '}(clic derecho en el punto → copiar coordenadas)
             </span>
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 4 }}>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140 }}>
               <span style={{ fontSize: 12, color: '#64748b' }}>Latitud</span>
-              <input
-                value={manualLat}
-                onChange={e => setManualLat(e.target.value)}
-                placeholder="-2.419400"
-                style={{ fontFamily: 'monospace', fontSize: 13 }}
-              />
+              <input value={manualLat} onChange={e => setManualLat(e.target.value)}
+                     placeholder="-2.419400" style={{ fontFamily: 'monospace', fontSize: 13 }} />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140 }}>
               <span style={{ fontSize: 12, color: '#64748b' }}>Longitud</span>
-              <input
-                value={manualLng}
-                onChange={e => setManualLng(e.target.value)}
-                placeholder="-79.343000"
-                style={{ fontFamily: 'monospace', fontSize: 13 }}
-              />
+              <input value={manualLng} onChange={e => setManualLng(e.target.value)}
+                     placeholder="-79.343000" style={{ fontFamily: 'monospace', fontSize: 13 }} />
             </label>
             <button className="btn btn-secondary" onClick={handleManualApply} style={{ height: 38 }}>
               Aplicar
