@@ -48,8 +48,10 @@ async function geocodeAddress(address) {
 // ── Google Maps Geocoding API ─────────────────────────────────────────────────
 function _googleGeocode(address, defaultCity, apiKey) {
   return new Promise((resolve) => {
-    const query   = encodeURIComponent(`${address}, ${defaultCity}`);
-    const path    = `/maps/api/geocode/json?address=${query}&key=${apiKey}&region=ec&language=es`;
+    // Convertir " Y " (intersección en español) a " & " que Google entiende
+    const normalized = address.replace(/\bY\b/gi, '&');
+    const query      = encodeURIComponent(`${normalized}, ${defaultCity}, Ecuador`);
+    const path       = `/maps/api/geocode/json?address=${query}&key=${apiKey}&region=ec&language=es&components=country:EC`;
 
     const options = {
       hostname: 'maps.googleapis.com',
