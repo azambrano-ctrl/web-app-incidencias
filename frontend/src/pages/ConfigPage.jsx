@@ -53,6 +53,8 @@ export default function ConfigPage() {
   // Escalation
   const [escalationHours, setEscalationHours] = useState('4');
   const [savingEscalation, setSavingEscalation] = useState(false);
+  const [defaultCity, setDefaultCity] = useState('La Troncal, Ecuador');
+  const [savingCity, setSavingCity] = useState(false);
 
   // Checklist templates
   const [showTemplateForm, setShowTemplateForm] = useState(false);
@@ -87,6 +89,7 @@ export default function ConfigPage() {
       setPushCfg(prev => ({ ...prev, push_enabled: s.push_enabled || '0' }));
       setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
       if (s.escalation_hours) setEscalationHours(s.escalation_hours);
+      if (s.default_city) setDefaultCity(s.default_city);
     },
   });
 
@@ -204,6 +207,15 @@ export default function ConfigPage() {
       toast.success('Umbral de escalamiento guardado');
     } catch { toast.error('Error al guardar'); }
     finally { setSavingEscalation(false); }
+  };
+
+  const handleSaveCity = async () => {
+    setSavingCity(true);
+    try {
+      await saveSettings({ default_city: defaultCity });
+      toast.success('Ciudad por defecto guardada');
+    } catch { toast.error('Error al guardar'); }
+    finally { setSavingCity(false); }
   };
 
   // ── Probar email ──
@@ -384,6 +396,34 @@ export default function ConfigPage() {
               </div>
               <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
                 Valor predeterminado: 4 horas. Rango válido: 1–168 horas.
+              </p>
+            </div>
+          )}
+
+          {/* ── CIUDAD / MAPA ── */}
+          {user?.role === 'admin' && (
+            <div className="card">
+              <h3 style={{ marginBottom: 8 }}>🗺️ Geocodificación del mapa</h3>
+              <p style={{ color: '#64748b', marginBottom: 16, fontSize: 14 }}>
+                Ciudad o región por defecto que se anexa a las direcciones al buscar su ubicación en el mapa.<br />
+                Ejemplo: <strong>La Troncal, Ecuador</strong> → buscará "Universidad Católica, La Troncal, Ecuador".
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 240 }}>
+                  <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Ciudad por defecto:</span>
+                  <input
+                    value={defaultCity}
+                    onChange={e => setDefaultCity(e.target.value)}
+                    placeholder="Ej: La Troncal, Ecuador"
+                    style={{ flex: 1 }}
+                  />
+                </label>
+                <button className="btn btn-primary btn-sm" onClick={handleSaveCity} disabled={savingCity}>
+                  {savingCity ? 'Guardando...' : 'Guardar'}
+                </button>
+              </div>
+              <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+                Después de guardar, ve al Mapa → "🔄 Actualizar ubicaciones" para re-geocodificar las incidencias existentes.
               </p>
             </div>
           )}

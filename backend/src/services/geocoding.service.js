@@ -1,10 +1,20 @@
 const https = require('https');
+const { getSetting } = require('../modules/settings/settings.service');
 
 async function geocodeAddress(address) {
   if (!address || address.trim().length < 5) return null;
 
-  // Intentar primero con la dirección original, luego con ", Ecuador" si falla
-  const attempts = [address.trim(), `${address.trim()}, Ecuador`];
+  const addr = address.trim();
+
+  // Leer ciudad configurada por el admin (ej: "La Troncal, Ecuador")
+  const defaultCity = (await getSetting('default_city')) || 'Ecuador';
+
+  // Intentos en orden: con ciudad + sin ciudad + solo Ecuador
+  const attempts = [
+    `${addr}, ${defaultCity}`,
+    addr,
+    `${addr}, Ecuador`,
+  ];
 
   for (const attempt of attempts) {
     const result = await _nominatim(attempt);

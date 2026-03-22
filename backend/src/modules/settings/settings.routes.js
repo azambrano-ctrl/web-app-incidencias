@@ -11,6 +11,7 @@ const SETTING_KEYS = [
   'email_user', 'email_pass', 'email_from_name', 'email_from_email',
   'whatsapp_enabled', 'whatsapp_api_url', 'whatsapp_token', 'whatsapp_body_template',
   'push_enabled', 'push_vapid_public',
+  'default_city',   // ciudad por defecto para geocodificación del mapa
 ];
 
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
