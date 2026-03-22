@@ -496,22 +496,65 @@ async function regeocode() {
   return { total: rows.length, updated, pending: rows.length - updated };
 }
 
-async function searchClients(q) {
+async function searchClients(q, userId, userRole) {
   const db = getDb();
-  // Un registro por cliente (el más reciente), con foto más reciente si existe
+
+  // Construir nombre completo: apellido1 + apellido2 + nombre1 + nombre2 o razon_social
+  // Para técnicos: solo clientes que tienen incidencias asignadas a ellos
+  const techFilter = userRole === 'technician'
+    ? `AND EXISTS (
+         SELECT 1 FROM incidents i
+         WHERE i.client_identificacion = c.identificacion
+           AND i.assigned_to = $2
+       )`
+    : '';
+
+  const params = q ? [`%${q}%`] : ['%%'];
+  if (userRole === 'technician') params.push(userId);
+
   const { rows } = await db.query(`
-    SELECT DISTINCT ON (LOWER(i.client_name))
-      i.id as incident_id, i.ticket_number,
-      i.client_name, i.client_address, i.client_phone, i.client_phone2,
-      i.latitude, i.longitude,
+    SELECT
+      c.id, c.identificacion,
+      TRIM(CONCAT_WS(' ', c.apellido1, c.apellido2, c.nombre1, c.nombre2)) AS nombre_completo,
+      COALESCE(NULLIF(TRIM(CONCAT_WS(' ', c.apellido1, c.apellido2, c.nombre1, c.nombre2)), ''), c.razon_social) AS nombre_display,
+      c.razon_social, c.direccion, c.celular1, c.celular2, c.sector,
+      -- Incidencia más reciente del cliente
+      (SELECT i.id FROM incidents i
+       WHERE i.client_identificacion = c.identificacion
+       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
+       ORDER BY i.created_at DESC LIMIT 1) as incident_id,
+      (SELECT i.ticket_number FROM incidents i
+       WHERE i.client_identificacion = c.identificacion
+       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
+       ORDER BY i.created_at DESC LIMIT 1) as ticket_number,
+      (SELECT i.latitude FROM incidents i
+       WHERE i.client_identificacion = c.identificacion
+       ORDER BY i.created_at DESC LIMIT 1) as latitude,
+      (SELECT i.longitude FROM incidents i
+       WHERE i.client_identificacion = c.identificacion
+       ORDER BY i.created_at DESC LIMIT 1) as longitude,
+      -- Foto más reciente de cualquier incidencia del cliente
       (SELECT ip.id FROM incident_photos ip
-       WHERE ip.incident_id = i.id
-       ORDER BY ip.created_at DESC LIMIT 1) as photo_id
-    FROM incidents i
-    WHERE ($1 = '' OR i.client_name ILIKE $2)
-    ORDER BY LOWER(i.client_name), i.created_at DESC
+       JOIN incidents i ON i.id = ip.incident_id
+       WHERE i.client_identificacion = c.identificacion
+       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
+       ORDER BY ip.created_at DESC LIMIT 1) as photo_id,
+      (SELECT ip.incident_id FROM incident_photos ip
+       JOIN incidents i ON i.id = ip.incident_id
+       WHERE i.client_identificacion = c.identificacion
+       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
+       ORDER BY ip.created_at DESC LIMIT 1) as photo_incident_id
+    FROM clients c
+    WHERE (
+      CONCAT_WS(' ', c.apellido1, c.apellido2, c.nombre1, c.nombre2) ILIKE $1
+      OR c.razon_social ILIKE $1
+      OR c.celular1 ILIKE $1
+      OR c.identificacion ILIKE $1
+    )
+    ${techFilter}
+    ORDER BY c.apellido1, c.nombre1
     LIMIT 50
-  `, [q, `%${q}%`]);
+  `, params);
   return rows;
 }
 

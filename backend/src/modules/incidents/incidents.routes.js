@@ -30,7 +30,7 @@ router.get('/map', async (req, res, next) => {
 
 // Directorio de clientes: buscar por nombre y obtener foto de la casa
 router.get('/clients/search', async (req, res, next) => {
-  try { res.json(await svc.searchClients(req.query.q || '')); } catch (e) { next(e); }
+  try { res.json(await svc.searchClients(req.query.q || '', req.user.id, req.user.role)); } catch (e) { next(e); }
 });
 
 // Re-geocodificar incidencias sin coordenadas (admin/supervisor)

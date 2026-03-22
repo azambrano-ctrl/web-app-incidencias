@@ -21,6 +21,7 @@ export default function ClientDirectoryPage() {
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ['clients-search', debouncedSearch],
     queryFn: () => searchClients(debouncedSearch),
+    enabled: debouncedSearch.length >= 2,
   });
 
   return (
@@ -30,38 +31,38 @@ export default function ClientDirectoryPage() {
         <Topbar title="Directorio de Clientes" />
         <div className="page-content">
           <div style={{ maxWidth: 700, margin: '0 auto' }}>
-            <div className="search-bar" style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: 20 }}>
               <input
                 type="text"
                 className="form-input"
-                placeholder="🔍 Buscar cliente por nombre..."
+                placeholder="🔍 Buscar por nombre, apellido, cédula o teléfono..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 autoFocus
-                style={{ fontSize: 16, padding: '10px 14px' }}
+                style={{ fontSize: 16, padding: '10px 14px', width: '100%' }}
               />
             </div>
 
-            {isLoading && <p className="text-muted" style={{ textAlign: 'center' }}>Buscando...</p>}
-
-            {!isLoading && clients.length === 0 && debouncedSearch && (
+            {search.length < 2 && (
               <p className="text-muted" style={{ textAlign: 'center' }}>
-                No se encontró ningún cliente con ese nombre.
+                Escribe al menos 2 caracteres para buscar.
               </p>
             )}
 
-            {!isLoading && clients.length === 0 && !debouncedSearch && (
+            {isLoading && <p className="text-muted" style={{ textAlign: 'center' }}>Buscando...</p>}
+
+            {!isLoading && search.length >= 2 && clients.length === 0 && (
               <p className="text-muted" style={{ textAlign: 'center' }}>
-                Escribe el nombre del cliente para buscarlo.
+                No se encontró ningún cliente con ese criterio.
               </p>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {clients.map(client => (
                 <ClientCard
-                  key={client.incident_id}
+                  key={client.id}
                   client={client}
-                  onViewIncident={() => navigate(`/incidents/${client.incident_id}`)}
+                  onViewIncident={client.incident_id ? () => navigate(`/incidencias/${client.incident_id}`) : null}
                 />
               ))}
             </div>
@@ -77,15 +78,17 @@ function ClientCard({ client, onViewIncident }) {
   const [photoSrc, setPhotoSrc] = useState(null);
 
   useEffect(() => {
-    if (!client.photo_id) return;
-    getPhoto(client.incident_id, client.photo_id)
+    if (!client.photo_id || !client.photo_incident_id) return;
+    getPhoto(client.photo_incident_id, client.photo_id)
       .then(p => setPhotoSrc(p.data))
       .catch(() => {});
-  }, [client.photo_id, client.incident_id]);
+  }, [client.photo_id, client.photo_incident_id]);
 
   const mapsUrl = client.latitude && client.longitude
     ? `https://www.google.com/maps?q=${client.latitude},${client.longitude}`
     : null;
+
+  const displayName = client.nombre_display || client.razon_social || '—';
 
   return (
     <div className="card" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: 16 }}>
@@ -104,27 +107,35 @@ function ClientCard({ client, onViewIncident }) {
 
       {/* Datos del cliente */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-          {client.client_name}
+        <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>
+          {displayName}
         </div>
-        <div style={{ color: '#555', fontSize: 14, marginBottom: 2 }}>
-          📍 {client.client_address}
-        </div>
-        {client.client_phone && (
+        {client.identificacion && (
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 4 }}>CI: {client.identificacion}</div>
+        )}
+        {client.direccion && (
+          <div style={{ color: '#555', fontSize: 14, marginBottom: 2 }}>📍 {client.direccion}</div>
+        )}
+        {client.sector && (
+          <div style={{ color: '#777', fontSize: 13, marginBottom: 2 }}>🏘️ {client.sector}</div>
+        )}
+        {client.celular1 && (
           <div style={{ fontSize: 14, marginBottom: 2 }}>
-            📞 <a href={`tel:${client.client_phone}`} style={{ color: 'inherit' }}>{client.client_phone}</a>
+            📞 <a href={`tel:${client.celular1}`} style={{ color: 'inherit' }}>{client.celular1}</a>
           </div>
         )}
-        {client.client_phone2 && (
+        {client.celular2 && (
           <div style={{ fontSize: 14, marginBottom: 6 }}>
-            📞 <a href={`tel:${client.client_phone2}`} style={{ color: 'inherit' }}>{client.client_phone2}</a>
+            📞 <a href={`tel:${client.celular2}`} style={{ color: 'inherit' }}>{client.celular2}</a>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button className="btn btn-sm" onClick={onViewIncident} style={{ fontSize: 13 }}>
-            Ver incidencia
-          </button>
+          {onViewIncident && (
+            <button className="btn btn-sm" onClick={onViewIncident} style={{ fontSize: 13 }}>
+              Ver incidencia
+            </button>
+          )}
           {mapsUrl && (
             <a
               href={mapsUrl}
