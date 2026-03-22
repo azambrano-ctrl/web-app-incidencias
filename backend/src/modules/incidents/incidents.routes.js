@@ -28,6 +28,11 @@ router.get('/map', async (req, res, next) => {
   try { res.json(await svc.getMapIncidents(req.user.id, req.user.role)); } catch (e) { next(e); }
 });
 
+// Re-geocodificar incidencias sin coordenadas (admin/supervisor)
+router.post('/map/regeocode', authorize('admin', 'supervisor'), async (req, res, next) => {
+  try { res.json(await svc.regeocode()); } catch (e) { next(e); }
+});
+
 router.get('/:id', async (req, res, next) => {
   try { res.json(await svc.getIncident(req.params.id)); } catch (e) { next(e); }
 });

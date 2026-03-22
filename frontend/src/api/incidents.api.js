@@ -49,3 +49,6 @@ export const deletePhoto = (id, photoId) =>
 
 export const deleteIncident = (id) =>
   api.delete(`/incidents/${id}`).then(r => r.data);
+
+export const regeocodeIncidents = () =>
+  api.post('/incidents/map/regeocode').then(r => r.data);

@@ -2,14 +2,26 @@ const https = require('https');
 
 async function geocodeAddress(address) {
   if (!address || address.trim().length < 5) return null;
+
+  // Intentar primero con la dirección original, luego con ", Ecuador" si falla
+  const attempts = [address.trim(), `${address.trim()}, Ecuador`];
+
+  for (const attempt of attempts) {
+    const result = await _nominatim(attempt);
+    if (result) return result;
+  }
+  return null;
+}
+
+function _nominatim(query) {
   return new Promise((resolve) => {
-    const query = encodeURIComponent(address.trim());
+    const encoded = encodeURIComponent(query);
     const options = {
       hostname: 'nominatim.openstreetmap.org',
-      path: `/search?q=${query}&format=json&limit=1`,
+      path: `/search?q=${encoded}&format=json&limit=1&countrycodes=ec`,
       method: 'GET',
       headers: {
-        'User-Agent': 'IncidenciasISP/1.0',
+        'User-Agent': 'IncidenciasISP/1.0 (contacto@incidenciasisp.com)',
         'Accept': 'application/json',
       },
     };
@@ -19,7 +31,7 @@ async function geocodeAddress(address) {
       res.on('end', () => {
         try {
           const data = JSON.parse(raw);
-          if (data.length > 0) {
+          if (Array.isArray(data) && data.length > 0) {
             resolve({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
           } else {
             resolve(null);
@@ -28,7 +40,7 @@ async function geocodeAddress(address) {
       });
     });
     req.on('error', () => resolve(null));
-    req.setTimeout(8000, () => { req.destroy(); resolve(null); });
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
     req.end();
   });
 }

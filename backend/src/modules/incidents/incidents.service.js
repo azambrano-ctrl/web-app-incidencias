@@ -400,14 +400,15 @@ async function getSummary() {
 async function getMapIncidents(userId, userRole) {
   const db = getDb();
   const params = [];
-  let where = `WHERE i.latitude IS NOT NULL AND i.status NOT IN ('cancelled','resolved','closed')`;
+  // Traer TODAS las incidencias activas, con o sin coordenadas
+  let where = `WHERE i.status NOT IN ('cancelled','resolved','closed')`;
   if (userRole === 'technician') {
     where += ` AND i.assigned_to=$1`;
     params.push(userId);
   }
   const { rows } = await db.query(`
     SELECT i.id, i.ticket_number, i.title, i.status, i.priority, i.type,
-      i.client_name, i.client_address, i.latitude, i.longitude, i.due_at,
+      i.client_name, i.client_address, i.client_phone, i.latitude, i.longitude, i.due_at,
       u.name as assigned_name
     FROM incidents i
     LEFT JOIN users u ON u.id = i.assigned_to
@@ -415,6 +416,29 @@ async function getMapIncidents(userId, userRole) {
     ORDER BY CASE i.priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END
   `, params);
   return rows;
+}
+
+async function regeocode() {
+  const db = getDb();
+  const { geocodeAddress } = require('../../services/geocoding.service');
+  // Buscar incidencias activas con dirección pero sin coordenadas
+  const { rows } = await db.query(`
+    SELECT id, client_address FROM incidents
+    WHERE latitude IS NULL AND client_address IS NOT NULL AND client_address <> ''
+    AND status NOT IN ('cancelled', 'closed')
+    LIMIT 30
+  `);
+  let updated = 0;
+  for (const inc of rows) {
+    const coords = await geocodeAddress(inc.client_address);
+    if (coords) {
+      await db.query(`UPDATE incidents SET latitude=$1, longitude=$2 WHERE id=$3`, [coords.lat, coords.lng, inc.id]);
+      updated++;
+    }
+    // Respetar rate limit de Nominatim: 1 req/s
+    await new Promise(r => setTimeout(r, 1100));
+  }
+  return { total: rows.length, updated, pending: rows.length - updated };
 }
 
 async function deleteIncident(id, deletedBy) {
@@ -428,7 +452,7 @@ async function deleteIncident(id, deletedBy) {
 
 module.exports = {
   setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus,
-  updateIncident, addComment, getSummary, getMapIncidents,
+  updateIncident, addComment, getSummary, getMapIncidents, regeocode,
   linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto,
   deleteIncident,
