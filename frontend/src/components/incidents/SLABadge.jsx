@@ -11,9 +11,32 @@ function toEcu(date) {
   return new Date(date.getTime() - 5 * 3600000);
 }
 
+/**
+ * Normaliza un Date ECU (resultado de toEcu) al horario hábil:
+ *  - Antes de 08:30 → 08:30 mismo día (o lunes si es domingo)
+ *  - Después de 18:00 → siguiente día hábil 08:30
+ *  - Domingo → lunes 08:30
+ */
+function snapToBusinessHours(ecuDate) {
+  const d = new Date(ecuDate);
+  const day  = d.getUTCDay();
+  const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
+
+  if (day === 0 || mins >= END_MINS) {
+    // domingo o después de jornada → siguiente día hábil 08:30
+    d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(8, 30, 0, 0);
+    while (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
+  } else if (mins < START_MINS) {
+    // antes de jornada → 08:30 mismo día
+    d.setUTCHours(8, 30, 0, 0);
+  }
+  return d;
+}
+
 function businessMinsUntil(dueAt) {
   const nowLocal = toEcu(new Date());
-  const dueLocal = toEcu(new Date(dueAt));
+  const dueLocal = snapToBusinessHours(toEcu(new Date(dueAt)));
   if (dueLocal <= nowLocal) return (dueLocal - nowLocal) / 60000; // negativo
 
   let remaining = 0;
@@ -44,7 +67,7 @@ function businessMinsUntil(dueAt) {
 
 function fmtDue(dueAt) {
   const ecuNow = toEcu(new Date());
-  const ecuDue = toEcu(new Date(dueAt));
+  const ecuDue = snapToBusinessHours(toEcu(new Date(dueAt)));
 
   // Formatear hora en 24h usando campos UTC (representan hora ECU)
   const h = String(ecuDue.getUTCHours()).padStart(2, '0');
