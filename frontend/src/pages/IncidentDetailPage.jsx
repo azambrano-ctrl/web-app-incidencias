@@ -462,34 +462,10 @@ export default function IncidentDetailPage() {
                 </div>
               )}
 
-              {/* ── Fotos ── */}
-              <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <h3 style={{ margin: 0 }}>📷 Fotos ({photos.length}/5)</h3>
-                  {photos.length < 5 && !['resolved', 'cancelled', 'closed'].includes(inc.status) && (
-                    <>
-                      <button
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => photoInputRef.current?.click()}
-                        disabled={uploadingPhoto}
-                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                      >
-                        📷 {uploadingPhoto ? 'Subiendo...' : 'Agregar foto'}
-                      </button>
-                      <input
-                        ref={photoInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        style={{ display: 'none' }}
-                        onChange={handlePhotoUpload}
-                      />
-                    </>
-                  )}
-                </div>
-                {photos.length === 0 ? (
-                  <p style={{ color: '#94a3b8', fontSize: 13, margin: 0 }}>No hay fotos adjuntas</p>
-                ) : (
+              {/* Fotos: visibles solo cuando la incidencia ya está resuelta/cerrada (solo lectura) */}
+              {['resolved', 'closed'].includes(inc.status) && photos.length > 0 && (
+                <div className="card">
+                  <h3 style={{ margin: '0 0 12px' }}>📷 Fotos de resolución ({photos.length})</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
                     {photos.map(photo => (
                       <PhotoThumb
@@ -504,8 +480,8 @@ export default function IncidentDetailPage() {
                       />
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="card">
                 <h3>Datos del cliente</h3>
@@ -728,6 +704,59 @@ export default function IncidentDetailPage() {
                       style={{ borderColor: !solution.trim() ? '#fca5a5' : undefined }}
                     />
                   </label>
+
+                  {/* ── Foto de la casa (obligatoria) ── */}
+                  <div style={{ marginTop: 16, padding: '12px 14px', background: photos.length === 0 ? '#fef2f2' : '#f0fdf4', border: `1px solid ${photos.length === 0 ? '#fca5a5' : '#86efac'}`, borderRadius: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: photos.length > 0 ? 10 : 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: photos.length === 0 ? '#dc2626' : '#166534' }}>
+                        📷 Foto de la casa <span style={{ color: '#ef4444' }}>*</span>
+                        {photos.length > 0 && <span style={{ color: '#166534', fontWeight: 400, marginLeft: 4 }}>({photos.length}/5) ✓</span>}
+                      </span>
+                      {photos.length < 5 && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => photoInputRef.current?.click()}
+                            disabled={uploadingPhoto}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                          >
+                            📷 {uploadingPhoto ? 'Subiendo...' : 'Agregar foto'}
+                          </button>
+                          <input
+                            ref={photoInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            style={{ display: 'none' }}
+                            onChange={handlePhotoUpload}
+                          />
+                        </>
+                      )}
+                    </div>
+                    {photos.length === 0 && (
+                      <p style={{ fontSize: 12, color: '#dc2626', margin: '6px 0 0' }}>
+                        Debes tomar al menos una foto de la casa del cliente para resolver.
+                      </p>
+                    )}
+                    {photos.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 6 }}>
+                        {photos.map(photo => (
+                          <PhotoThumb
+                            key={photo.id}
+                            photo={photo}
+                            incidentId={id}
+                            user={user}
+                            onView={() => handleViewPhoto(photo.id)}
+                            onDelete={() => {
+                              if (confirm('¿Eliminar esta foto?')) deletePhotoMut.mutate(photo.id);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div style={{ marginTop: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>✍️ Firma del cliente <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(opcional)</span></span>
@@ -760,6 +789,7 @@ export default function IncidentDetailPage() {
                 disabled={
                   !newStatus ||
                   (newStatus === 'resolved' && !solution.trim()) ||
+                  (newStatus === 'resolved' && photos.length === 0) ||
                   (newStatus === 'resolved' && checklist && clChecked < clTotal) ||
                   statusMut.isPending
                 }
