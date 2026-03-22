@@ -3,6 +3,7 @@ export const STATUS_LABELS = {
   assigned: 'Asignada',
   in_progress: 'En Progreso',
   resolved: 'Resuelta',
+  closed: 'Cerrada',
   cancelled: 'Cancelada',
 };
 
@@ -11,6 +12,7 @@ export const STATUS_COLORS = {
   assigned: '#f97316',
   in_progress: '#3b82f6',
   resolved: '#22c55e',
+  closed: '#6366f1',
   cancelled: '#9ca3af',
 };
 
@@ -41,7 +43,7 @@ export const ROLE_LABELS = {
 };
 
 export const STATUS_TRANSITIONS = {
-  admin: ['open', 'assigned', 'in_progress', 'resolved', 'cancelled'],
-  supervisor: ['open', 'assigned', 'in_progress', 'resolved', 'cancelled'],
+  admin: ['open', 'assigned', 'in_progress', 'resolved', 'closed', 'cancelled'],
+  supervisor: ['open', 'assigned', 'in_progress', 'resolved', 'closed', 'cancelled'],
   technician: ['in_progress', 'resolved'],
 };

@@ -54,7 +54,7 @@ router.patch('/:id/assign', authorize('admin', 'supervisor'),
 );
 
 router.patch('/:id/status',
-  body('status').isIn(['open', 'assigned', 'in_progress', 'resolved', 'cancelled']),
+  body('status').isIn(['open', 'assigned', 'in_progress', 'resolved', 'closed', 'cancelled']),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
