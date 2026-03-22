@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import * as exifr from 'exifr';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import SignaturePad from '../components/incidents/SignaturePad';
@@ -6,6 +7,7 @@ import {
   getIncident, changeStatus, addComment, assignIncident, updateIncident,
   getIncidents, linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto, deleteIncident,
+  geocodeIncident, setIncidentLocation,
 } from '../api/incidents.api';
 import {
   getIncidentChecklist, createIncidentChecklist, toggleChecklistItem, getTemplates,
@@ -21,7 +23,6 @@ import { SLABadge } from '../components/incidents/SLABadge';
 import IncidentForm from '../components/incidents/IncidentForm';
 import { TYPE_LABELS, STATUS_TRANSITIONS, STATUS_LABELS } from '../utils/constants';
 import { downloadIncidentPDF } from '../utils/incidentPdf';
-import { geocodeIncident, setIncidentLocation } from '../api/incidents.api';
 import { toast } from 'react-hot-toast';
 
 export default function IncidentDetailPage() {
@@ -204,11 +205,24 @@ export default function IncidentDetailPage() {
     if (photos.length >= 5) { toast.error('Máximo 5 fotos por incidencia'); return; }
     setUploadingPhoto(true);
     try {
-      // Compress image to max 800px width
+      // Extraer GPS del EXIF antes de comprimir (canvas borra el EXIF)
+      let gpsCoords = null;
+      try {
+        const gps = await exifr.gps(file);
+        if (gps?.latitude && gps?.longitude) gpsCoords = gps;
+      } catch { /* sin EXIF, continuar */ }
+
       const compressed = await compressImage(file, 800);
       await uploadPhoto(id, compressed.data, file.name, file.type);
       toast.success('Foto subida');
       refetchPhotos();
+
+      // Si la foto tiene GPS y la incidencia no tiene ubicación → guardar automáticamente
+      if (gpsCoords && !inc?.latitude) {
+        await setIncidentLocation(id, gpsCoords.latitude, gpsCoords.longitude);
+        refetch();
+        toast.success('📍 Ubicación guardada desde la foto');
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al subir foto');
     } finally {
