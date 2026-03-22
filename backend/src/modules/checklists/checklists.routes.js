@@ -128,6 +128,15 @@ router.patch('/incidents/:id/items/:index', async (req, res, next) => {
     const incidentId = req.params.id;
     const index = parseInt(req.params.index);
 
+    // Solo el técnico asignado o admin/supervisor puede marcar items
+    if (req.user.role === 'technician') {
+      const { rows: inc } = await db.query(
+        `SELECT assigned_to FROM incidents WHERE id=$1`, [incidentId]
+      );
+      if (!inc[0] || inc[0].assigned_to !== req.user.id)
+        return res.status(403).json({ error: 'Solo el técnico asignado puede actualizar este checklist' });
+    }
+
     const { rows } = await db.query(`SELECT * FROM incident_checklists WHERE incident_id=$1`, [incidentId]);
     if (!rows[0]) return res.status(404).json({ error: 'Checklist no encontrado' });
 

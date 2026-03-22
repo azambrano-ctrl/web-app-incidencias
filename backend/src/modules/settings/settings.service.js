@@ -15,8 +15,15 @@ async function setSetting(key, value) {
 }
 
 async function getSettings(keys) {
-  const result = {};
-  for (const k of keys) result[k] = await getSetting(k);
+  if (!keys || keys.length === 0) return {};
+  const db = getDb();
+  const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await db.query(
+    `SELECT key, value FROM settings WHERE key IN (${placeholders})`,
+    keys
+  );
+  const result = Object.fromEntries(keys.map(k => [k, null]));
+  for (const row of rows) result[row.key] = row.value;
   return result;
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { login } from '../api/auth.api';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { loginUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,7 +18,8 @@ export default function LoginPage() {
     try {
       const { token } = await login(email, password);
       loginUser(token);
-      navigate('/');
+      const next = searchParams.get('next');
+      navigate(next && next.startsWith('/') ? next : '/');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al iniciar sesión');
     } finally {
@@ -59,7 +61,7 @@ export default function LoginPage() {
             {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
           </button>
         </form>
-        <p className="login-hint">Demo: admin@incidencias.com / admin123</p>
+        <p className="login-hint">Contacta al administrador para obtener tus credenciales de acceso.</p>
       </div>
     </div>
   );

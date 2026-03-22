@@ -7,7 +7,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const token = localStorage.getItem('token');
     if (!token) return null;
-    try { return jwtDecode(token); } catch { return null; }
+    try { return jwtDecode(token); }
+    catch { localStorage.removeItem('token'); return null; }
   });
 
   const loginUser = useCallback((token) => {

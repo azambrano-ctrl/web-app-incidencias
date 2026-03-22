@@ -31,9 +31,9 @@ function startReminderJob() {
         WHERE i.status IN ('open','assigned','in_progress')
           AND i.assigned_to IS NOT NULL
           AND i.due_at IS NOT NULL
-          AND i.due_at <= NOW() + INTERVAL '${warnHours} hours'
+          AND i.due_at <= NOW() + ($1 || ' hours')::INTERVAL
           AND (i.last_reminded_at IS NULL OR i.last_reminded_at < NOW() - INTERVAL '30 minutes')
-      `);
+      `, [String(warnHours)]);
 
       for (const inc of pending) {
         const isOverdue = new Date(inc.due_at) < new Date();

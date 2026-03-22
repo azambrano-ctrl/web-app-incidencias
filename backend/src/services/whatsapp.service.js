@@ -26,10 +26,12 @@ async function sendWhatsApp(to, message, overrideConfig) {
   // Formatear número: quitar espacios/guiones, agregar código país si no tiene +
   const phone = to.replace(/[\s\-()]/g, '');
 
+  // Usar JSON.stringify para escapar correctamente todos los caracteres especiales
+  const safeMessage = JSON.stringify(message).slice(1, -1); // quita las comillas externas
   const bodyStr = template
     .replace(/{token}/g, token)
     .replace(/{to}/g, phone)
-    .replace(/{message}/g, message.replace(/"/g, '\\"'));
+    .replace(/{message}/g, safeMessage);
 
   const res = await fetch(apiUrl, {
     method: 'POST',
