@@ -1,9 +1,13 @@
-// Horario hábil: 8:30 – 18:00, lunes a sábado (hora Ecuador)
+// Horario hábil: 8:30 – 18:00, lunes a sábado (hora Ecuador = UTC-5)
 const START_MINS = 8 * 60 + 30;  // 510
 const END_MINS   = 18 * 60;       // 1080
 
+/**
+ * Convierte UTC → representación ECU almacenada en los campos UTC del objeto Date.
+ * Usar siempre getUTC*() sobre el resultado para obtener hora/día ECU,
+ * evitando doble-desplazamiento en navegadores que ya están en UTC-5.
+ */
 function toEcu(date) {
-  // Ecuador = UTC-5
   return new Date(date.getTime() - 5 * 3600000);
 }
 
@@ -16,18 +20,18 @@ function businessMinsUntil(dueAt) {
   let cur = new Date(nowLocal);
 
   while (cur < dueLocal) {
-    const day  = cur.getDay();
-    const mins = cur.getHours() * 60 + cur.getMinutes();
+    const day  = cur.getUTCDay();
+    const mins = cur.getUTCHours() * 60 + cur.getUTCMinutes();
 
     if (day === 0 || mins >= END_MINS) {
       // Saltar al siguiente día hábil 8:30
-      cur.setDate(cur.getDate() + 1);
-      cur.setHours(8, 30, 0, 0);
-      while (cur.getDay() === 0) cur.setDate(cur.getDate() + 1);
+      cur.setUTCDate(cur.getUTCDate() + 1);
+      cur.setUTCHours(8, 30, 0, 0);
+      while (cur.getUTCDay() === 0) cur.setUTCDate(cur.getUTCDate() + 1);
       continue;
     }
     if (mins < START_MINS) {
-      cur.setHours(8, 30, 0, 0);
+      cur.setUTCHours(8, 30, 0, 0);
       continue;
     }
 
@@ -42,18 +46,20 @@ function fmtDue(dueAt) {
   const ecuNow = toEcu(new Date());
   const ecuDue = toEcu(new Date(dueAt));
 
-  const timeStr = ecuDue.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' });
-  const nowDay  = ecuNow.toDateString();
-  const dueDay  = ecuDue.toDateString();
+  // Formatear hora en 24h usando campos UTC (representan hora ECU)
+  const h = String(ecuDue.getUTCHours()).padStart(2, '0');
+  const m = String(ecuDue.getUTCMinutes()).padStart(2, '0');
+  const timeStr = `${h}:${m}`;
 
-  const tmrw = new Date(ecuNow);
-  tmrw.setDate(tmrw.getDate() + 1);
+  // Comparar fechas usando campos UTC (representan fecha ECU)
+  const dayKey  = d => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  const tmrwEcu = new Date(ecuNow.getTime() + 24 * 3600000);
 
-  if (dueDay === nowDay)            return `hoy ${timeStr}`;
-  if (dueDay === tmrw.toDateString()) return `mañana ${timeStr}`;
+  if (dayKey(ecuDue) === dayKey(ecuNow))   return `hoy ${timeStr}`;
+  if (dayKey(ecuDue) === dayKey(tmrwEcu))  return `mañana ${timeStr}`;
 
   const DAYS = ['dom','lun','mar','mié','jue','vie','sáb'];
-  return `${DAYS[ecuDue.getDay()]} ${timeStr}`;
+  return `${DAYS[ecuDue.getUTCDay()]} ${timeStr}`;
 }
 
 export function SLABadge({ dueAt, status }) {
