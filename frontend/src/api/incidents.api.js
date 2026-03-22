@@ -46,3 +46,6 @@ export const uploadPhoto = (id, data, filename, mime_type) =>
 
 export const deletePhoto = (id, photoId) =>
   api.delete(`/incidents/${id}/photos/${photoId}`).then(r => r.data);
+
+export const deleteIncident = (id) =>
+  api.delete(`/incidents/${id}`).then(r => r.data);

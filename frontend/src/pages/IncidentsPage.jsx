@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { getIncidents, createIncident, assignIncident } from '../api/incidents.api';
+import { getIncidents, createIncident, assignIncident, deleteIncident } from '../api/incidents.api';
 import { getUsers } from '../api/users.api';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -64,6 +64,23 @@ export default function IncidentsPage() {
     onSuccess: () => { toast.success('Técnico asignado'); setAssignModal(null); qc.invalidateQueries(['incidents']); },
     onError: (e) => toast.error(e.response?.data?.error || 'Error al asignar'),
   });
+
+  const deleteMut = useMutation({
+    mutationFn: (id) => deleteIncident(id),
+    onSuccess: (_, id) => {
+      toast.success('Incidencia eliminada');
+      qc.invalidateQueries(['incidents']);
+      qc.removeQueries(['incident', String(id)]);
+    },
+    onError: (e) => toast.error(e.response?.data?.error || 'Error al eliminar'),
+  });
+
+  const handleDelete = (e, inc) => {
+    e.stopPropagation();
+    if (window.confirm(`¿Eliminar ${inc.ticket_number}? Esta acción no se puede deshacer.`)) {
+      deleteMut.mutate(inc.id);
+    }
+  };
 
   const setFilter = (k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }));
   const incidents = data?.data || [];
@@ -170,13 +187,24 @@ export default function IncidentsPage() {
                         <td>{inc.assigned_name || <span className="unassigned">Sin asignar</span>}</td>
                         <td>{inc.client_name}</td>
                         <td>{new Date(inc.created_at).toLocaleDateString('es-HN')}</td>
-                        <td onClick={e => e.stopPropagation()}>
-                          {['admin', 'supervisor'].includes(user?.role) && inc.status !== 'cancelled' && (
+                        <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          {['admin', 'supervisor'].includes(user?.role) && (
                             <button
                               className="btn btn-sm btn-secondary"
                               onClick={() => { setAssignModal(inc); setSelectedTech(inc.assigned_to || ''); }}
                             >
                               Asignar
+                            </button>
+                          )}
+                          {user?.role === 'admin' && (
+                            <button
+                              className="btn btn-sm"
+                              style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5' }}
+                              onClick={(e) => handleDelete(e, inc)}
+                              disabled={deleteMut.isPending}
+                              title="Eliminar incidencia"
+                            >
+                              🗑
                             </button>
                           )}
                         </td>

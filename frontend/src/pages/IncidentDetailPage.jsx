@@ -5,7 +5,7 @@ import SignaturePad from '../components/incidents/SignaturePad';
 import {
   getIncident, changeStatus, addComment, assignIncident, updateIncident,
   getIncidents, linkIncident, unlinkIncident,
-  getPhotos, getPhoto, uploadPhoto, deletePhoto,
+  getPhotos, getPhoto, uploadPhoto, deletePhoto, deleteIncident,
 } from '../api/incidents.api';
 import {
   getIncidentChecklist, createIncidentChecklist, toggleChecklistItem, getTemplates,
@@ -554,6 +554,21 @@ export default function IncidentDetailPage() {
                 {['admin', 'supervisor'].includes(user?.role) && inc.parent_id && (
                   <button className="btn btn-secondary btn-full" onClick={() => unlinkMut.mutate()} disabled={unlinkMut.isPending}>
                     ✂️ Desvincular del padre
+                  </button>
+                )}
+                {user?.role === 'admin' && (
+                  <button
+                    className="btn btn-full"
+                    style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', marginTop: 8 }}
+                    onClick={() => {
+                      if (window.confirm(`¿Eliminar ${inc.ticket_number}? Esta acción no se puede deshacer.`)) {
+                        deleteIncident(inc.id)
+                          .then(() => { toast.success('Incidencia eliminada'); navigate('/incidencias'); qc.invalidateQueries(['incidents']); })
+                          .catch(e => toast.error(e.response?.data?.error || 'Error al eliminar'));
+                      }
+                    }}
+                  >
+                    🗑 Eliminar incidencia
                   </button>
                 )}
               </div>

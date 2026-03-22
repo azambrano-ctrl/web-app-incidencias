@@ -88,6 +88,10 @@ router.post('/:id/link',
   }
 );
 
+router.delete('/:id', authorize('admin'), async (req, res, next) => {
+  try { res.json(await svc.deleteIncident(req.params.id, req.user.id)); } catch (e) { next(e); }
+});
+
 router.delete('/:id/link', authorize('admin', 'supervisor'), async (req, res, next) => {
   try { res.json(await svc.unlinkIncident(req.params.id)); } catch (e) { next(e); }
 });

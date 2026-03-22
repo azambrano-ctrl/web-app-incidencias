@@ -399,9 +399,19 @@ async function getMapIncidents(userId, userRole) {
   return rows;
 }
 
+async function deleteIncident(id, deletedBy) {
+  const db = getDb();
+  const inc = await getIncident(id);
+  await db.query('DELETE FROM incidents WHERE id=$1', [id]);
+  emit('incident:deleted', 'role:admin', { id, ticket_number: inc.ticket_number });
+  emit('incident:deleted', 'role:supervisor', { id, ticket_number: inc.ticket_number });
+  return { message: `Incidencia ${inc.ticket_number} eliminada` };
+}
+
 module.exports = {
   setIo, getIncident, listIncidents, createIncident, assignIncident, changeStatus,
   updateIncident, addComment, getSummary, getMapIncidents,
   linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto,
+  deleteIncident,
 };
