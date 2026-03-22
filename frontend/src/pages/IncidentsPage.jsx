@@ -196,7 +196,8 @@ export default function IncidentsPage() {
                         <td>{inc.assigned_name || <span className="unassigned">Sin asignar</span>}</td>
                         <td>{inc.client_name}</td>
                         <td>{new Date(inc.created_at).toLocaleDateString('es-HN')}</td>
-                        <td onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <td onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-start' }}>
                           {['admin', 'supervisor'].includes(user?.role) && (
                             <button
                               className="btn btn-sm btn-secondary"
@@ -216,6 +217,7 @@ export default function IncidentsPage() {
                               🗑
                             </button>
                           )}
+                          </div>
                         </td>
                       </tr>
                     ))}
