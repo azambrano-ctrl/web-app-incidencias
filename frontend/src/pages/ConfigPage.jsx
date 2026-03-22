@@ -55,6 +55,8 @@ export default function ConfigPage() {
   const [savingEscalation, setSavingEscalation] = useState(false);
   const [defaultCity, setDefaultCity] = useState('La Troncal, Ecuador');
   const [savingCity, setSavingCity] = useState(false);
+  const [mapBbox, setMapBbox] = useState('');
+  const [savingBbox, setSavingBbox] = useState(false);
 
   // Checklist templates
   const [showTemplateForm, setShowTemplateForm] = useState(false);
@@ -90,6 +92,7 @@ export default function ConfigPage() {
       setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
       if (s.escalation_hours) setEscalationHours(s.escalation_hours);
       if (s.default_city) setDefaultCity(s.default_city);
+      if (s.map_bbox) setMapBbox(s.map_bbox);
     },
   });
 
@@ -216,6 +219,15 @@ export default function ConfigPage() {
       toast.success('Ciudad por defecto guardada');
     } catch { toast.error('Error al guardar'); }
     finally { setSavingCity(false); }
+  };
+
+  const handleSaveBbox = async () => {
+    setSavingBbox(true);
+    try {
+      await saveSettings({ map_bbox: mapBbox });
+      toast.success('Área del mapa guardada');
+    } catch { toast.error('Error al guardar'); }
+    finally { setSavingBbox(false); }
   };
 
   // ── Probar email ──
@@ -405,24 +417,47 @@ export default function ConfigPage() {
             <div className="card">
               <h3 style={{ marginBottom: 8 }}>🗺️ Geocodificación del mapa</h3>
               <p style={{ color: '#64748b', marginBottom: 16, fontSize: 14 }}>
-                Ciudad o región por defecto que se anexa a las direcciones al buscar su ubicación en el mapa.<br />
-                Ejemplo: <strong>La Troncal, Ecuador</strong> → buscará "Universidad Católica, La Troncal, Ecuador".
+                Configura cómo se buscan las direcciones en el mapa. La <strong>ciudad por defecto</strong> se
+                anexa a cada dirección. El <strong>área del mapa</strong> restringe los resultados a tu zona
+                para evitar que aparezcan en otro lugar del mundo.
               </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+
+              {/* Ciudad */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 240 }}>
                   <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Ciudad por defecto:</span>
                   <input
                     value={defaultCity}
                     onChange={e => setDefaultCity(e.target.value)}
-                    placeholder="Ej: La Troncal, Ecuador"
+                    placeholder="Ej: La Troncal"
                     style={{ flex: 1 }}
                   />
                 </label>
                 <button className="btn btn-primary btn-sm" onClick={handleSaveCity} disabled={savingCity}>
-                  {savingCity ? 'Guardando...' : 'Guardar'}
+                  {savingCity ? 'Guardando...' : 'Guardar ciudad'}
                 </button>
               </div>
-              <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+
+              {/* Bounding box */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 240 }}>
+                  <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>Área del mapa (bbox):</span>
+                  <input
+                    value={mapBbox}
+                    onChange={e => setMapBbox(e.target.value)}
+                    placeholder="minLon,maxLat,maxLon,minLat  ej: -79.45,-2.35,-79.25,-2.55"
+                    style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}
+                  />
+                </label>
+                <button className="btn btn-primary btn-sm" onClick={handleSaveBbox} disabled={savingBbox}>
+                  {savingBbox ? 'Guardando...' : 'Guardar área'}
+                </button>
+              </div>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                Para La Troncal usa: <code>-79.45,-2.35,-79.25,-2.55</code> · Obtén las coordenadas de tu zona en{' '}
+                <a href="https://boundingbox.klokantech.com" target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>
+                  boundingbox.klokantech.com
+                </a>.<br />
                 Después de guardar, ve al Mapa → "🔄 Actualizar ubicaciones" para re-geocodificar las incidencias existentes.
               </p>
             </div>

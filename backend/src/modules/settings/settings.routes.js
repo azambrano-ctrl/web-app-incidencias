@@ -12,6 +12,7 @@ const SETTING_KEYS = [
   'whatsapp_enabled', 'whatsapp_api_url', 'whatsapp_token', 'whatsapp_body_template',
   'push_enabled', 'push_vapid_public',
   'default_city',   // ciudad por defecto para geocodificación del mapa
+  'map_bbox',       // bounding box para restringir geocodificación al área local (minLon,maxLat,maxLon,minLat)
 ];
 
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
