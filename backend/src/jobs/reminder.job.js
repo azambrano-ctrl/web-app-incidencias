@@ -9,6 +9,61 @@ let _io = null;
 function setIo(io) { _io = io; }
 const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+// Horario hábil: lun–sáb 8:30–18:00, Ecuador (UTC-5)
+const BIZ_START = 8 * 60 + 30; // 510 min
+const BIZ_END   = 18 * 60;     // 1080 min
+
+function toEcu(d) { return new Date(d.getTime() - 5 * 3600000); }
+
+function snapToBusinessStart(ecuDate) {
+  const d = new Date(ecuDate);
+  const day  = d.getUTCDay();
+  const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
+  if (day === 0 || mins >= BIZ_END) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(8, 30, 0, 0);
+    while (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
+  } else if (mins < BIZ_START) {
+    d.setUTCHours(8, 30, 0, 0);
+  }
+  return d;
+}
+
+/**
+ * Horas hábiles transcurridas desde `sinceDate` hasta ahora.
+ * Solo cuenta minutos dentro de lun–sáb 8:30–18:00 Ecuador.
+ */
+function businessHoursElapsed(sinceDate) {
+  let cur = snapToBusinessStart(toEcu(new Date(sinceDate)));
+  const now = toEcu(new Date());
+  if (cur >= now) return 0;
+
+  let elapsed = 0;
+  while (cur < now) {
+    const day  = cur.getUTCDay();
+    const mins = cur.getUTCHours() * 60 + cur.getUTCMinutes();
+    if (day === 0 || mins >= BIZ_END) {
+      cur.setUTCDate(cur.getUTCDate() + 1);
+      cur.setUTCHours(8, 30, 0, 0);
+      while (cur.getUTCDay() === 0) cur.setUTCDate(cur.getUTCDate() + 1);
+      continue;
+    }
+    if (mins < BIZ_START) { cur.setUTCHours(8, 30, 0, 0); continue; }
+    const chunk = Math.min(BIZ_END - mins, (now - cur) / 60000);
+    elapsed += chunk;
+    cur = new Date(cur.getTime() + chunk * 60000);
+  }
+  return elapsed / 60; // horas
+}
+
+/** True si ahora es horario hábil en Ecuador */
+function isBusinessHoursNow() {
+  const now = toEcu(new Date());
+  const day  = now.getUTCDay();
+  const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  return day >= 1 && day <= 6 && mins >= BIZ_START && mins < BIZ_END;
+}
+
 function startReminderJob() {
   const intervalMin = process.env.REMINDER_INTERVAL_MINUTES || 5;
   const warnHours   = process.env.REMINDER_WARN_HOURS || 1; // avisar 1h antes del vencimiento
@@ -62,19 +117,29 @@ function startReminderJob() {
         console.log(`[Cron] SLA recordatorio: ${inc.ticket_number} → ${inc.technician_name}`);
       }
 
-      /* ── Escalamiento automático ── */
+      /* ── Escalamiento automático (solo en horario hábil) ── */
+      if (!isBusinessHoursNow()) {
+        // Fuera de horario laboral no se escala (domingos, noches, etc.)
+        console.log('[Cron] Fuera de horario hábil — escalamiento omitido');
+      } else {
       const { rows: settingRows } = await db.query(
         `SELECT value FROM settings WHERE key='escalation_hours'`
       );
       const escalationHours = parseFloat(settingRows[0]?.value || '4');
 
-      const { rows: toEscalate } = await db.query(`
+      // Candidatos: sin escalar, estado activo y con suficiente antigüedad de reloj
+      // (filtramos con margen amplio, luego verificamos horas hábiles en JS)
+      const { rows: candidates } = await db.query(`
         SELECT i.* FROM incidents i
         WHERE i.status IN ('open','assigned')
           AND i.escalated = FALSE
-          AND i.created_at < NOW() - ($1 || ' hours')::INTERVAL
-          AND i.status NOT IN ('resolved','closed','cancelled')
-      `, [String(escalationHours)]);
+          AND i.created_at < NOW() - INTERVAL '1 hour'
+      `);
+
+      // Solo escalar los que superen N horas hábiles desde su creación
+      const toEscalate = candidates.filter(
+        inc => businessHoursElapsed(inc.created_at) >= escalationHours
+      );
 
       if (toEscalate.length > 0) {
         const { rows: supervisors } = await db.query(
@@ -98,6 +163,7 @@ function startReminderJob() {
           console.log(`[Cron] Escalada: ${inc.ticket_number}`);
         }
       }
+      } // fin bloque isBusinessHoursNow
 
       /* ── Notificaciones de mantenimientos próximos (1h antes) ── */
       const { rows: upcoming } = await db.query(`
