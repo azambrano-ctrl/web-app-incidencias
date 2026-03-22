@@ -20,7 +20,7 @@ export default function IncidentsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const [filters, setFilters] = useState({ status: '', priority: '', type: '', page: 1, limit: 20 });
+  const [filters, setFilters] = useState({ status: '', priority: '', type: '', assigned_to: '', page: 1, limit: 20 });
   const [showForm, setShowForm] = useState(false);
   const [assignModal, setAssignModal] = useState(null);
   const [selectedTech, setSelectedTech] = useState('');
@@ -120,6 +120,15 @@ export default function IncidentsPage() {
                 <option value="tv">TV Cable</option>
                 <option value="both">Ambos</option>
               </select>
+              {['admin', 'supervisor'].includes(user?.role) && (
+                <select value={filters.assigned_to} onChange={e => setFilter('assigned_to', e.target.value)}>
+                  <option value="">Todos los técnicos</option>
+                  <option value="unassigned">Sin asignar</option>
+                  {(technicians || []).map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             {['admin', 'supervisor'].includes(user?.role) && (
               <button className="btn btn-primary" onClick={() => setShowForm(true)}>+ Nueva Incidencia</button>

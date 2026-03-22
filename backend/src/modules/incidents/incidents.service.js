@@ -71,7 +71,8 @@ async function listIncidents(filters, userId, userRole) {
   if (status)      { where.push(`i.status=$${idx++}`);      params.push(status); }
   if (priority)    { where.push(`i.priority=$${idx++}`);    params.push(priority); }
   if (type)        { where.push(`i.type=$${idx++}`);        params.push(type); }
-  if (assigned_to) { where.push(`i.assigned_to=$${idx++}`); params.push(assigned_to); }
+  if (assigned_to === 'unassigned') { where.push(`i.assigned_to IS NULL`); }
+  else if (assigned_to) { where.push(`i.assigned_to=$${idx++}`); params.push(assigned_to); }
 
   const whereClause = where.length ? 'WHERE ' + where.join(' AND ') : '';
 
