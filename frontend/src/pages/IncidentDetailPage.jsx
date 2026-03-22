@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import SignatureCanvas from 'react-signature-canvas';
+import SignaturePad from '../components/incidents/SignaturePad';
 import {
   getIncident, changeStatus, addComment, assignIncident, updateIncident,
   getIncidents, linkIncident, unlinkIncident,
@@ -634,10 +634,9 @@ export default function IncidentDetailPage() {
                       >Limpiar</button>
                     </div>
                     <div style={{ border: '2px dashed var(--border)', borderRadius: 8, overflow: 'hidden', background: '#fff', touchAction: 'none' }}>
-                      <SignatureCanvas
+                      <SignaturePad
                         ref={sigRef}
-                        penColor="#1e293b"
-                        canvasProps={{ width: 440, height: 160, style: { width: '100%', height: 160, display: 'block' } }}
+                        height={160}
                         onEnd={() => setSigEmpty(false)}
                       />
                     </div>
