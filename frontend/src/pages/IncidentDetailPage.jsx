@@ -927,7 +927,7 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
   const [manualLng, setManualLng] = useState(inc.longitude ? parseFloat(inc.longitude).toFixed(6) : '');
   const [manualErr, setManualErr] = useState('');
 
-  // Coloca o mueve el marcador; siempre funciona si el mapa ya está listo
+  // Coloca o mueve el marcador usando el mismo divIcon rojo
   const placeMarker = (lat, lng) => {
     const L   = leafletRef.current;
     const map = mapRef.current;
@@ -936,7 +936,19 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
     if (markerRef.current) {
       markerRef.current.setLatLng([lat, lng]);
     } else {
-      markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
+      const pinIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:28px;height:36px;">
+          <svg viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 0C6.27 0 0 6.27 0 14c0 9.625 14 22 14 22S28 23.625 28 14C28 6.27 21.73 0 14 0z"
+                  fill="#ef4444" stroke="#fff" stroke-width="2"/>
+            <circle cx="14" cy="14" r="6" fill="#fff"/>
+          </svg>
+        </div>`,
+        iconSize: [28, 36],
+        iconAnchor: [14, 36],
+      });
+      markerRef.current = L.marker([lat, lng], { icon: pinIcon, draggable: true }).addTo(map);
       markerRef.current.on('dragend', () => {
         const p = markerRef.current.getLatLng();
         setPicked({ lat: p.lat, lng: p.lng });
@@ -971,7 +983,7 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
         .then(([{ default: L }]) => {
           if (destroyed || mapRef.current) return;
 
-          leafletRef.current = L; // guardar referencia global del componente
+          leafletRef.current = L;
 
           const initLat = inc.latitude  ? parseFloat(inc.latitude)  : -2.4194;
           const initLng = inc.longitude ? parseFloat(inc.longitude) : -79.3430;
@@ -984,18 +996,38 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
             attribution: '© OpenStreetMap contributors',
           }).addTo(map);
 
-          // Forzar redibujado correcto del mapa dentro del modal
           setTimeout(() => map.invalidateSize(), 100);
 
-          // Marcador inicial si la incidencia ya tiene coordenadas
-          if (inc.latitude && inc.longitude) {
-            markerRef.current = L.marker([initLat, initLng], { draggable: true }).addTo(map);
-            markerRef.current.on('dragend', () => {
-              const p = markerRef.current.getLatLng();
+          // divIcon: pin HTML puro, sin imágenes → siempre visible en Vite/React
+          const pinIcon = L.divIcon({
+            className: '',
+            html: `<div style="
+              width:28px;height:36px;position:relative;cursor:grab;
+            ">
+              <svg viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14 0C6.27 0 0 6.27 0 14c0 9.625 14 22 14 22S28 23.625 28 14C28 6.27 21.73 0 14 0z"
+                      fill="#ef4444" stroke="#fff" stroke-width="2"/>
+                <circle cx="14" cy="14" r="6" fill="#fff"/>
+              </svg>
+            </div>`,
+            iconSize: [28, 36],
+            iconAnchor: [14, 36],
+          });
+
+          const makeMarker = (lat, lng) => {
+            const m = L.marker([lat, lng], { icon: pinIcon, draggable: true }).addTo(map);
+            m.on('dragend', () => {
+              const p = m.getLatLng();
               setPicked({ lat: p.lat, lng: p.lng });
               setManualLat(p.lat.toFixed(6));
               setManualLng(p.lng.toFixed(6));
             });
+            return m;
+          };
+
+          // Marcador inicial si ya tiene coordenadas
+          if (inc.latitude && inc.longitude) {
+            markerRef.current = makeMarker(initLat, initLng);
           }
 
           // Clic en mapa → colocar o mover marcador
@@ -1004,13 +1036,7 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
             if (markerRef.current) {
               markerRef.current.setLatLng([lat, lng]);
             } else {
-              markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(map);
-              markerRef.current.on('dragend', () => {
-                const p = markerRef.current.getLatLng();
-                setPicked({ lat: p.lat, lng: p.lng });
-                setManualLat(p.lat.toFixed(6));
-                setManualLng(p.lng.toFixed(6));
-              });
+              markerRef.current = makeMarker(lat, lng);
             }
             setPicked({ lat, lng });
             setManualLat(lat.toFixed(6));
