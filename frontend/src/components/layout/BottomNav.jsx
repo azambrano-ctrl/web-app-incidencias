@@ -14,6 +14,7 @@ export default function BottomNav() {
     { to: '/', label: 'Dashboard', icon: '📊', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/incidencias', label: 'Incidencias', icon: '🎫', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/mapa', label: 'Mapa', icon: '🗺️', roles: ['admin', 'supervisor', 'technician'] },
+    { to: '/clientes', label: 'Clientes', icon: '🏠', roles: ['admin', 'supervisor', 'technician'] },
     { to: '/mantenimientos', label: 'Mantenim.', icon: '🔧', roles: ['admin', 'supervisor'] },
     { to: '/guardia', label: 'Guardia', icon: '🛡️', roles: ['admin', 'supervisor'] },
     { to: '/configuracion', label: 'Config', icon: '⚙️', roles: ['admin'] },

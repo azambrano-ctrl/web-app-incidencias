@@ -14,6 +14,7 @@ import ConfigPage from './pages/ConfigPage';
 import MapPage from './pages/MapPage';
 import MaintenancePage from './pages/MaintenancePage';
 import OnCallPage from './pages/OnCallPage';
+import ClientDirectoryPage from './pages/ClientDirectoryPage';
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
@@ -34,6 +35,7 @@ export default function App() {
               <Route path="/mapa" element={<ProtectedRoute roles={['admin', 'supervisor', 'technician']}><MapPage /></ProtectedRoute>} />
               <Route path="/mantenimientos" element={<ProtectedRoute roles={['admin', 'supervisor']}><MaintenancePage /></ProtectedRoute>} />
               <Route path="/guardia" element={<ProtectedRoute roles={['admin', 'supervisor']}><OnCallPage /></ProtectedRoute>} />
+              <Route path="/clientes" element={<ProtectedRoute roles={['admin', 'supervisor', 'technician']}><ClientDirectoryPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

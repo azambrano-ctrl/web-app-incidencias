@@ -496,6 +496,25 @@ async function regeocode() {
   return { total: rows.length, updated, pending: rows.length - updated };
 }
 
+async function searchClients(q) {
+  const db = getDb();
+  // Un registro por cliente (el más reciente), con foto más reciente si existe
+  const { rows } = await db.query(`
+    SELECT DISTINCT ON (LOWER(i.client_name))
+      i.id as incident_id, i.ticket_number,
+      i.client_name, i.client_address, i.client_phone, i.client_phone2,
+      i.latitude, i.longitude,
+      (SELECT ip.id FROM incident_photos ip
+       WHERE ip.incident_id = i.id
+       ORDER BY ip.created_at DESC LIMIT 1) as photo_id
+    FROM incidents i
+    WHERE ($1 = '' OR i.client_name ILIKE $2)
+    ORDER BY LOWER(i.client_name), i.created_at DESC
+    LIMIT 50
+  `, [q, `%${q}%`]);
+  return rows;
+}
+
 async function deleteIncident(id, deletedBy) {
   const db = getDb();
   const inc = await getIncident(id);
@@ -510,5 +529,5 @@ module.exports = {
   updateIncident, geocodeOne, setLocation, addComment, getSummary, getMapIncidents, regeocode,
   linkIncident, unlinkIncident,
   getPhotos, getPhoto, uploadPhoto, deletePhoto,
-  deleteIncident,
+  deleteIncident, searchClients,
 };

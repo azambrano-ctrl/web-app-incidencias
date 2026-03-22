@@ -58,3 +58,6 @@ export const geocodeIncident = (id) =>
 
 export const setIncidentLocation = (id, lat, lng) =>
   api.patch(`/incidents/${id}/location`, { lat, lng }).then(r => r.data);
+
+export const searchClients = (q) =>
+  api.get('/incidents/clients/search', { params: { q } }).then(r => r.data);
