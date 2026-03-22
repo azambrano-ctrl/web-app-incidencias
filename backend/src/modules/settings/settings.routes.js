@@ -16,8 +16,18 @@ const SETTING_KEYS = [
   'google_maps_key', // API key de Google Maps Geocoding (opcional, mejora precisión)
 ];
 
+// Claves que NUNCA se devuelven al cliente (passwords, tokens, API keys)
+const SENSITIVE_KEYS = new Set(['email_pass', 'whatsapp_token', 'google_maps_key', 'push_vapid_private']);
+
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
-  try { res.json(await getSettings(SETTING_KEYS)); } catch (e) { next(e); }
+  try {
+    const all = await getSettings(SETTING_KEYS);
+    const safe = {};
+    for (const [k, v] of Object.entries(all)) {
+      safe[k] = SENSITIVE_KEYS.has(k) ? (v ? '***configured***' : '') : v;
+    }
+    res.json(safe);
+  } catch (e) { next(e); }
 });
 
 router.put('/', authenticate, authorize('admin'), async (req, res, next) => {

@@ -40,14 +40,24 @@ app.use(morgan('dev'));
 app.use(cookieParser());
 app.use(express.json({ limit: '15mb' }));
 
-// Rate limiting para login
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Demasiados intentos de login, intente en 15 minutos' },
-});
+const makeLimiter = (max, windowMs, msg) =>
+  rateLimit({ windowMs, max, message: { error: msg } });
 
-app.use('/api/v1/auth/login', loginLimiter);
+// Login: 20 intentos / 15 min
+app.use('/api/v1/auth/login',
+  makeLimiter(20, 15 * 60 * 1000, 'Demasiados intentos de login, intente en 15 minutos'));
+
+// Crear/modificar usuarios: 30 operaciones / 15 min (solo admin)
+app.use('/api/v1/users',
+  makeLimiter(30, 15 * 60 * 1000, 'Demasiadas operaciones de usuario, espere 15 minutos'));
+
+// Cambiar contraseña: 5 intentos / hora
+app.use('/api/v1/users/:id/password',
+  makeLimiter(5, 60 * 60 * 1000, 'Demasiados intentos de cambio de contraseña'));
+
+// Subida de fotos: 30 fotos / 10 min
+app.use('/api/v1/incidents/:id/photos',
+  makeLimiter(30, 10 * 60 * 1000, 'Demasiadas fotos subidas, espere 10 minutos'));
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/incidents', incidentRoutes);

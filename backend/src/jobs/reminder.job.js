@@ -7,6 +7,7 @@ const { sendPush } = require('../services/push.service');
 
 let _io = null;
 function setIo(io) { _io = io; }
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function startReminderJob() {
   const intervalMin = process.env.REMINDER_INTERVAL_MINUTES || 5;
@@ -184,7 +185,7 @@ function startReminderJob() {
           <h2 style="color:#2563eb">🌅 Resumen matutino — ${items.length} incidencia${items.length > 1 ? 's' : ''} pendiente${items.length > 1 ? 's' : ''}</h2>
           <p>Buenos días, <strong>${tech.technician_name}</strong>.</p>
           <p>Las siguientes incidencias están pendientes de resolución:</p>
-          <ul>${items.map(i => `<li><b>${i.ticket_number}</b>: ${i.title} — <span style="color:#f59e0b">${i.priority}</span></li>`).join('')}</ul>
+          <ul>${items.map(i => `<li><b>${esc(i.ticket_number)}</b>: ${esc(i.title)} — <span style="color:#f59e0b">${esc(i.priority)}</span></li>`).join('')}</ul>
           <p style="color:#64748b;font-size:13px;">Horario de atención: 8:30 – 18:00</p>`;
 
         if (tech.tech_email) sendEmail(tech.tech_email, `📋 ${items.length} incidencia${items.length > 1 ? 's' : ''} pendiente${items.length > 1 ? 's' : ''} — IncidenciasISP`, emailHtml)

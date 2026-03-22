@@ -10,6 +10,9 @@ const { addBusinessHours } = require('../../utils/businessHours');
 // Horas HÁBILES por prioridad (8:30–18:00, lun–sáb)
 const SLA_HOURS = { critical: 2, high: 4, medium: 8, low: 16 };
 
+// Escapa caracteres HTML para prevenir XSS en emails
+const esc = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
 let _io = null;
 function setIo(io) { _io = io; }
 function emit(event, room, data) { if (_io) _io.to(room).emit(event, data); }
@@ -196,12 +199,12 @@ async function assignIncident(id, technicianId, assignedBy) {
   const techUser = techRows[0];
   const emailHtml = `
     <h2 style="color:#2563eb">Nueva incidencia asignada</h2>
-    <p><b>Ticket:</b> ${updated.ticket_number}</p>
-    <p><b>Título:</b> ${updated.title}</p>
-    <p><b>Cliente:</b> ${updated.client_name}</p>
-    <p><b>Dirección:</b> ${updated.client_address}</p>
-    <p><b>Prioridad:</b> ${updated.priority}</p>
-    <p><b>Descripción:</b> ${updated.description}</p>`;
+    <p><b>Ticket:</b> ${esc(updated.ticket_number)}</p>
+    <p><b>Título:</b> ${esc(updated.title)}</p>
+    <p><b>Cliente:</b> ${esc(updated.client_name)}</p>
+    <p><b>Dirección:</b> ${esc(updated.client_address)}</p>
+    <p><b>Prioridad:</b> ${esc(updated.priority)}</p>
+    <p><b>Descripción:</b> ${esc(updated.description)}</p>`;
   const waMsg = `📋 *Nueva incidencia asignada*\n🎫 ${updated.ticket_number}\n📌 ${updated.title}\n👤 ${updated.client_name}\n📍 ${updated.client_address}\n⚡ Prioridad: ${updated.priority}`;
   if (techUser?.email) sendEmail(techUser.email, `Nueva incidencia: ${updated.ticket_number}`, emailHtml).catch(e => console.error('[Email]', e.message));
   if (techUser?.phone) sendWhatsApp(techUser.phone, waMsg).catch(e => console.error('[WhatsApp]', e.message));
@@ -499,13 +502,14 @@ async function regeocode() {
 async function searchClients(q, userId, userRole) {
   const db = getDb();
 
-  // Construir nombre completo: apellido1 + apellido2 + nombre1 + nombre2 o razon_social
-  // Para técnicos: solo clientes que tienen incidencias asignadas a ellos
+  // Para técnicos: solo clientes con incidencias ACTIVAS asignadas a ellos (no cerradas/canceladas)
+  const ACTIVE = `status NOT IN ('resolved','closed','cancelled')`;
   const techFilter = userRole === 'technician'
     ? `AND EXISTS (
          SELECT 1 FROM incidents i
          WHERE i.client_identificacion = c.identificacion
            AND i.assigned_to = $2
+           AND i.${ACTIVE}
        )`
     : '';
 

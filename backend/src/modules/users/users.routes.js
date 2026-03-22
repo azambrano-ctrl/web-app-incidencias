@@ -14,9 +14,14 @@ router.get('/:id', authorize('admin', 'supervisor'), async (req, res, next) => {
   try { res.json(await svc.getUser(req.params.id)); } catch (e) { next(e); }
 });
 
+const passwordRule = body('password')
+  .isLength({ min: 8 }).withMessage('Mínimo 8 caracteres')
+  .matches(/[A-Z]/).withMessage('Debe contener al menos una mayúscula')
+  .matches(/[0-9]/).withMessage('Debe contener al menos un número');
+
 router.post('/', authorize('admin'),
   body('name').notEmpty(), body('email').isEmail(),
-  body('password').isLength({ min: 6 }), body('role').isIn(['admin', 'supervisor', 'technician']),
+  passwordRule, body('role').isIn(['admin', 'supervisor', 'technician']),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -34,7 +39,7 @@ router.put('/:id', authorize('admin'),
 );
 
 router.patch('/:id/password', authorize('admin'),
-  body('password').isLength({ min: 6 }),
+  passwordRule,
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });

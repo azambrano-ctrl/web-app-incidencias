@@ -26,12 +26,32 @@ async function sendWhatsApp(to, message, overrideConfig) {
   // Formatear número: quitar espacios/guiones, agregar código país si no tiene +
   const phone = to.replace(/[\s\-()]/g, '');
 
-  // Usar JSON.stringify para escapar correctamente todos los caracteres especiales
-  const safeMessage = JSON.stringify(message).slice(1, -1); // quita las comillas externas
-  const bodyStr = template
-    .replace(/{token}/g, token)
-    .replace(/{to}/g, phone)
-    .replace(/{message}/g, safeMessage);
+  // Construir body parseando el template como JSON para evitar injection
+  // Los valores se insertan via JSON.parse/stringify, nunca por string replacement directo
+  let bodyStr;
+  try {
+    // Parsear el template reemplazando los placeholders con valores seguros vía JSON
+    const parsed = JSON.parse(
+      template
+        .replace(/{token}/g, '__TOKEN__')
+        .replace(/{to}/g, '__TO__')
+        .replace(/{message}/g, '__MESSAGE__')
+    );
+    const replacer = (val) => {
+      if (val === '__TOKEN__') return token;
+      if (val === '__TO__') return phone;
+      if (val === '__MESSAGE__') return message;
+      return val;
+    };
+    const replaced = JSON.parse(JSON.stringify(parsed, (k, v) => replacer(v)));
+    bodyStr = JSON.stringify(replaced);
+  } catch {
+    // Si el template no es JSON válido, usar valores escapados con JSON.stringify
+    bodyStr = template
+      .replace(/{token}/g, JSON.stringify(token).slice(1, -1))
+      .replace(/{to}/g, JSON.stringify(phone).slice(1, -1))
+      .replace(/{message}/g, JSON.stringify(message).slice(1, -1));
+  }
 
   const res = await fetch(apiUrl, {
     method: 'POST',

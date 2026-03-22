@@ -56,7 +56,14 @@ router.patch('/:id/location',
 );
 
 router.get('/:id', async (req, res, next) => {
-  try { res.json(await svc.getIncident(req.params.id)); } catch (e) { next(e); }
+  try {
+    const inc = await svc.getIncident(req.params.id);
+    // Técnico solo puede ver incidencias asignadas a él
+    if (req.user.role === 'technician' && inc.assigned_to !== req.user.id) {
+      return res.status(403).json({ error: 'No tienes acceso a esta incidencia' });
+    }
+    res.json(inc);
+  } catch (e) { next(e); }
 });
 
 router.post('/', authorize('admin', 'supervisor'), incidentValidation, async (req, res, next) => {
@@ -81,6 +88,7 @@ router.patch('/:id/assign', authorize('admin', 'supervisor'),
 );
 
 router.patch('/:id/status',
+  authorize('admin', 'supervisor', 'technician'),
   body('status').isIn(['open', 'assigned', 'in_progress', 'resolved', 'closed', 'cancelled']),
   async (req, res, next) => {
     const errors = validationResult(req);
