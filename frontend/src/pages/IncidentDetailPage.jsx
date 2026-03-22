@@ -921,25 +921,72 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
       ? { lat: parseFloat(inc.latitude), lng: parseFloat(inc.longitude) }
       : null
   );
+  // Entrada manual de coordenadas
+  const [manualLat, setManualLat] = useState(inc.latitude  ? String(parseFloat(inc.latitude).toFixed(6))  : '');
+  const [manualLng, setManualLng] = useState(inc.longitude ? String(parseFloat(inc.longitude).toFixed(6)) : '');
+  const [manualErr, setManualErr] = useState('');
 
+  // Mover marcador y mapa a unas coords dadas
+  function applyCoords(lat, lng, L) {
+    const map = mapRef.current;
+    if (!map) return;
+    if (markerRef.current) {
+      markerRef.current.setLatLng([lat, lng]);
+    } else {
+      markerRef.current = L
+        ? L.marker([lat, lng], { draggable: true }).addTo(map)
+        : null;
+      if (markerRef.current) {
+        markerRef.current.on('dragend', () => {
+          const p = markerRef.current.getLatLng();
+          setPicked({ lat: p.lat, lng: p.lng });
+          setManualLat(p.lat.toFixed(6));
+          setManualLng(p.lng.toFixed(6));
+        });
+      }
+    }
+    map.setView([lat, lng], 17);
+    setPicked({ lat, lng });
+  }
+
+  // Validar y aplicar coordenadas manuales
+  function handleManualApply() {
+    const lat = parseFloat(manualLat.replace(',', '.'));
+    const lng = parseFloat(manualLng.replace(',', '.'));
+    if (isNaN(lat) || lat < -90  || lat > 90)  { setManualErr('Latitud inválida (ej: -2.419400)');  return; }
+    if (isNaN(lng) || lng < -180 || lng > 180) { setManualErr('Longitud inválida (ej: -79.343000)'); return; }
+    setManualErr('');
+    setManualLat(lat.toFixed(6));
+    setManualLng(lng.toFixed(6));
+    applyCoords(lat, lng, null);
+    setPicked({ lat, lng });
+  }
+
+  // Inicializar Leaflet con delay para que el modal esté visible
   useEffect(() => {
-    if (!containerRef.current) return;
     let destroyed = false;
+    let leafletLib = null;
 
-    import('leaflet').then(({ default: L }) => {
-      import('leaflet/dist/leaflet.css').then(() => {
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return;
+
+      Promise.all([import('leaflet'), import('leaflet/dist/leaflet.css')]).then(([{ default: L }]) => {
         if (destroyed || mapRef.current) return;
+        leafletLib = L;
 
         const initLat = inc.latitude  ? parseFloat(inc.latitude)  : -2.4194;
         const initLng = inc.longitude ? parseFloat(inc.longitude) : -79.3430;
         const zoom    = inc.latitude  ? 16 : 14;
 
-        const map = L.map(containerRef.current).setView([initLat, initLng], zoom);
+        const map = L.map(containerRef.current, { zoomControl: true }).setView([initLat, initLng], zoom);
         mapRef.current = map;
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
+          attribution: '© OpenStreetMap',
         }).addTo(map);
+
+        // Forzar redibujado tras renderizado del modal
+        setTimeout(() => map.invalidateSize(), 50);
 
         // Marcador inicial si ya tiene coords
         if (inc.latitude && inc.longitude) {
@@ -947,6 +994,8 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
           markerRef.current.on('dragend', () => {
             const p = markerRef.current.getLatLng();
             setPicked({ lat: p.lat, lng: p.lng });
+            setManualLat(p.lat.toFixed(6));
+            setManualLng(p.lng.toFixed(6));
           });
         }
 
@@ -960,37 +1009,86 @@ function MapPickerModal({ inc, onClose, onSave, saving }) {
             markerRef.current.on('dragend', () => {
               const p = markerRef.current.getLatLng();
               setPicked({ lat: p.lat, lng: p.lng });
+              setManualLat(p.lat.toFixed(6));
+              setManualLng(p.lng.toFixed(6));
             });
           }
           setPicked({ lat, lng });
+          setManualLat(lat.toFixed(6));
+          setManualLng(lng.toFixed(6));
         });
-      });
-    });
+      }).catch(() => {});
+    }, 120); // esperar que el modal esté pintado en pantalla
 
     return () => {
       destroyed = true;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      clearTimeout(timer);
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; markerRef.current = null; }
     };
   }, []);
 
+  const gmapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(inc.client_address || 'La Troncal, Ecuador')}`;
+
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 640, width: '95vw' }}>
+      <div className="modal" style={{ maxWidth: 660, width: '95vw' }}>
         <div className="modal-header">
-          <h3 style={{ margin: 0 }}>📍 Fijar ubicación en el mapa</h3>
+          <h3 style={{ margin: 0 }}>📍 Fijar ubicación</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}>×</button>
         </div>
-        <div className="modal-body" style={{ padding: 0 }}>
-          <p style={{ padding: '8px 16px 4px', fontSize: 13, color: '#64748b', margin: 0 }}>
-            Haz clic en el mapa para colocar el marcador en la ubicación exacta. Puedes arrastrarlo para ajustarlo.
+
+        <div className="modal-body" style={{ padding: '12px 16px 0' }}>
+
+          {/* ── Opción A: mapa interactivo ── */}
+          <p style={{ fontSize: 13, color: '#374151', marginBottom: 6, fontWeight: 600 }}>
+            Opción A — Haz clic en el mapa para colocar el pin:
           </p>
-          <div ref={containerRef} style={{ height: 380, width: '100%' }} />
+          <div ref={containerRef} style={{ height: 320, width: '100%', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }} />
+
           {picked && (
-            <p style={{ padding: '4px 16px', fontSize: 11, color: '#64748b', margin: 0, fontFamily: 'monospace' }}>
+            <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 12px', fontFamily: 'monospace' }}>
               📌 {picked.lat.toFixed(6)}, {picked.lng.toFixed(6)}
             </p>
           )}
+
+          <hr style={{ margin: '12px 0', borderColor: '#e2e8f0' }} />
+
+          {/* ── Opción B: pegar coords de Google Maps ── */}
+          <p style={{ fontSize: 13, color: '#374151', marginBottom: 6, fontWeight: 600 }}>
+            Opción B — Pega las coordenadas desde{' '}
+            <a href={gmapsUrl} target="_blank" rel="noreferrer" style={{ color: '#2563eb' }}>
+              Google Maps ↗
+            </a>
+            <span style={{ fontWeight: 400, color: '#64748b', fontSize: 12 }}>
+              {' '}(clic derecho sobre el punto → copiar coordenadas)
+            </span>
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 4 }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140 }}>
+              <span style={{ fontSize: 12, color: '#64748b' }}>Latitud</span>
+              <input
+                value={manualLat}
+                onChange={e => setManualLat(e.target.value)}
+                placeholder="-2.419400"
+                style={{ fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 140 }}>
+              <span style={{ fontSize: 12, color: '#64748b' }}>Longitud</span>
+              <input
+                value={manualLng}
+                onChange={e => setManualLng(e.target.value)}
+                placeholder="-79.343000"
+                style={{ fontFamily: 'monospace', fontSize: 13 }}
+              />
+            </label>
+            <button className="btn btn-secondary" onClick={handleManualApply} style={{ height: 38 }}>
+              Aplicar
+            </button>
+          </div>
+          {manualErr && <p style={{ color: '#ef4444', fontSize: 12, margin: '0 0 8px' }}>{manualErr}</p>}
         </div>
+
         <div className="form-actions" style={{ padding: '12px 16px' }}>
           <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
           <button
