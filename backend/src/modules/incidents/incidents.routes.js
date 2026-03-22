@@ -59,7 +59,10 @@ router.patch('/:id/status',
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
-      res.json(await svc.changeStatus(req.params.id, req.body.status, req.body.comment, req.user.id, req.user.role, req.body.solution, req.body.signature));
+      const { signature } = req.body;
+      if (signature && Buffer.byteLength(signature, 'utf8') > MAX_SIG_BYTES * 1.4)
+        return res.status(413).json({ error: 'La firma supera el tamaño permitido (500 KB)' });
+      res.json(await svc.changeStatus(req.params.id, req.body.status, req.body.comment, req.user.id, req.user.role, req.body.solution, signature));
     } catch (e) { next(e); }
   }
 );
@@ -95,10 +98,15 @@ router.get('/:id/photos', async (req, res, next) => {
   try { res.json(await svc.getPhotos(req.params.id)); } catch (e) { next(e); }
 });
 
+const MAX_PHOTO_BYTES  = 5 * 1024 * 1024; // 5 MB en base64 ≈ 6.7 MB string
+const MAX_SIG_BYTES    = 500 * 1024;       // 500 KB para firmas
+
 router.post('/:id/photos', async (req, res, next) => {
   try {
     const { data, filename, mime_type } = req.body;
     if (!data) return res.status(400).json({ error: 'Se requiere el campo data (base64)' });
+    if (Buffer.byteLength(data, 'utf8') > MAX_PHOTO_BYTES * 1.4)
+      return res.status(413).json({ error: 'La imagen supera el límite de 5 MB' });
     const photo = await svc.uploadPhoto(
       req.params.id,
       req.user.id,

@@ -48,9 +48,9 @@ function startReminderJob() {
         }
 
         const emailHtml = `<h2 style="color:#ef4444">⚠️ Recordatorio</h2><p>${msg}</p>`;
-        if (inc.tech_email) sendEmail(inc.tech_email, `Recordatorio: ${inc.ticket_number}`, emailHtml).catch(() => {});
-        if (inc.tech_phone) sendWhatsApp(inc.tech_phone, msg).catch(() => {});
-        sendPush(inc.assigned_to, { title: 'Recordatorio de incidencia', body: msg, url: `/incidencias/${inc.id}` }).catch(() => {});
+        if (inc.tech_email) sendEmail(inc.tech_email, `Recordatorio: ${inc.ticket_number}`, emailHtml).catch(err => console.error('[Cron] Email error:', err.message));
+        if (inc.tech_phone) sendWhatsApp(inc.tech_phone, msg).catch(err => console.error('[Cron] WhatsApp error:', err.message));
+        sendPush(inc.assigned_to, { title: 'Recordatorio de incidencia', body: msg, url: `/incidencias/${inc.id}` }).catch(err => console.error('[Cron] Push error:', err.message));
 
         await db.query(`UPDATE incidents SET last_reminded_at=NOW() WHERE id=$1`, [inc.id]);
         console.log(`[Cron] Recordatorio: ${inc.ticket_number} -> ${inc.technician_name}`);
@@ -106,7 +106,7 @@ function startReminderJob() {
               _io.to(`user:${sup.id}`).emit('incident:escalated', { incident: inc, message: escMsg });
             }
             // Notify via push
-            sendPush(sup.id, { title: 'Incidencia escalada', body: escMsg, url: `/incidencias/${inc.id}` }).catch(() => {});
+            sendPush(sup.id, { title: 'Incidencia escalada', body: escMsg, url: `/incidencias/${inc.id}` }).catch(err => console.error('[Cron] Push escalation error:', err.message));
           }
 
           console.log(`[Cron] Escalada: ${inc.ticket_number}`);

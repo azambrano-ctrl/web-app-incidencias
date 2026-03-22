@@ -38,10 +38,12 @@ async function runMigrations() {
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
-    CREATE INDEX IF NOT EXISTS idx_incidents_status   ON incidents(status);
-    CREATE INDEX IF NOT EXISTS idx_incidents_assigned ON incidents(assigned_to);
-    CREATE INDEX IF NOT EXISTS idx_incidents_priority ON incidents(priority);
-    CREATE INDEX IF NOT EXISTS idx_incidents_created  ON incidents(created_at);
+    CREATE INDEX IF NOT EXISTS idx_incidents_status          ON incidents(status);
+    CREATE INDEX IF NOT EXISTS idx_incidents_assigned        ON incidents(assigned_to);
+    CREATE INDEX IF NOT EXISTS idx_incidents_priority        ON incidents(priority);
+    CREATE INDEX IF NOT EXISTS idx_incidents_created         ON incidents(created_at);
+    CREATE INDEX IF NOT EXISTS idx_incidents_status_priority ON incidents(status, priority);
+    CREATE INDEX IF NOT EXISTS idx_incidents_assigned_status ON incidents(assigned_to, status);
 
     CREATE TABLE IF NOT EXISTS status_history (
       id           SERIAL PRIMARY KEY,

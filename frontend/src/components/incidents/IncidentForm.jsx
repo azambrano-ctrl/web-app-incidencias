@@ -17,7 +17,7 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
   const suggestRef = useRef(null);
 
   useEffect(() => {
-    getUsers('technician').then(data => setTechnicians(data.users || data)).catch(() => {});
+    getUsers('technician').then(data => setTechnicians(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
