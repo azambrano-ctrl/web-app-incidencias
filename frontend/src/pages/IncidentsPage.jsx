@@ -52,106 +52,133 @@ function fmtSLA(dueAt, status) {
 
 async function exportAllToPDF({ filters, userName }) {
   toast('Preparando PDF...', { icon: '⏳' });
-  // Fetch all incidents with current filters but no pagination limit
   const result = await getIncidents({ ...filters, page: 1, limit: 9999 });
   const all = result?.data || [];
 
   if (all.length === 0) { toast.error('No hay incidencias para exportar'); return; }
 
+  // A4 landscape = 297 × 210 mm — usamos todo el ancho
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-  const W = doc.internal.pageSize.getWidth();
+  const W = doc.internal.pageSize.getWidth();   // 297
+  const H = doc.internal.pageSize.getHeight();  // 210
 
-  // Header
+  /* ── Header ── */
   doc.setFillColor(...PRIMARY);
-  doc.rect(0, 0, W, 24, 'F');
+  doc.rect(0, 0, W, 26, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text('📡 IncidenciasISP — Listado de incidencias', 14, 10);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(14);
+  doc.text('IncidenciasISP — Listado completo de incidencias', 12, 11);
 
-  // Active filters summary
   const activeFilters = [];
   if (filters.status)      activeFilters.push(`Estado: ${STATUS_LABELS[filters.status] || filters.status}`);
   if (filters.priority)    activeFilters.push(`Prioridad: ${PRIORITY_LABELS[filters.priority] || filters.priority}`);
   if (filters.type)        activeFilters.push(`Servicio: ${TYPE_LABELS[filters.type] || filters.type}`);
-  if (filters.assigned_to) activeFilters.push('Filtro por técnico activo');
-  const filterStr = activeFilters.length ? `Filtros: ${activeFilters.join(' · ')}` : 'Todos los registros';
-  doc.text(`${filterStr}   ·   Total: ${all.length} incidencias   ·   Generado por: ${userName}`, 14, 17);
+  if (filters.assigned_to) activeFilters.push('Con filtro de técnico');
+  const filterStr = activeFilters.length ? activeFilters.join(' · ') : 'Todos los registros';
 
-  const now = new Date().toLocaleString('es-EC', { timeZone: 'America/Guayaquil', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  doc.text(now, W - 14, 17, { align: 'right' });
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Filtros: ${filterStr}   ·   Total: ${all.length} incidencias   ·   Exportado por: ${userName}`, 12, 19);
 
-  // Table
+  const nowStr = new Date().toLocaleString('es-EC', {
+    timeZone: 'America/Guayaquil', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+  doc.text(nowStr, W - 12, 19, { align: 'right' });
+
+  /* ── Tabla principal ── */
+  // Columnas: Ticket | Título | Tipo | Prioridad | Estado | SLA | Técnico | Cliente | Teléfonos | Dirección | Creada
+  // Suma anchos = 272mm (dentro de 297 - 12*2 = 273mm usables)
   autoTable(doc, {
-    startY: 28,
-    margin: { left: 10, right: 10 },
-    styles: { fontSize: 8, cellPadding: 2.5, textColor: DARK, overflow: 'ellipsize' },
-    headStyles: { fillColor: PRIMARY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    startY: 30,
+    margin: { left: 8, right: 8 },
+    tableWidth: W - 16,
+    styles: {
+      fontSize: 7.5,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      textColor: DARK,
+      overflow: 'linebreak',
+      valign: 'middle',
+    },
+    headStyles: {
+      fillColor: PRIMARY, textColor: 255,
+      fontStyle: 'bold', fontSize: 7.5,
+      halign: 'center',
+    },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     head: [[
-      'Ticket', 'Título', 'Servicio', 'Prioridad', 'Estado', 'SLA',
-      'Técnico', 'Cliente', 'Dirección', 'Creada',
+      'Ticket', 'Título', 'Tipo', 'Prioridad', 'Estado', 'SLA',
+      'Técnico', 'Cliente', 'Teléfonos', 'Dirección', 'Creada',
     ]],
-    body: all.map(inc => [
-      inc.ticket_number + (inc.escalated ? ' 🔺' : ''),
-      inc.title,
-      TYPE_LABELS[inc.type] || inc.type,
-      PRIORITY_LABELS[inc.priority] || inc.priority,
-      STATUS_LABELS[inc.status]   || inc.status,
-      fmtSLA(inc.due_at, inc.status),
-      inc.assigned_name || 'Sin asignar',
-      inc.client_name   || '—',
-      inc.address       || '—',
-      fmtDate(inc.created_at),
-    ]),
+    body: all.map(inc => {
+      // Teléfonos: principal + secundario si existe
+      const tel = [inc.client_phone, inc.client_phone2].filter(Boolean).join('\n') || '—';
+      return [
+        inc.ticket_number + (inc.escalated ? '\n🔺 Escalada' : ''),
+        inc.title,
+        TYPE_LABELS[inc.type] || inc.type,
+        PRIORITY_LABELS[inc.priority] || inc.priority,
+        STATUS_LABELS[inc.status]    || inc.status,
+        fmtSLA(inc.due_at, inc.status),
+        inc.assigned_name  || 'Sin asignar',
+        inc.client_name    || '—',
+        tel,
+        inc.client_address || '—',
+        fmtDate(inc.created_at),
+      ];
+    }),
     columnStyles: {
-      0: { cellWidth: 22, fontStyle: 'bold' },
-      1: { cellWidth: 50 },
-      2: { cellWidth: 20 },
-      3: { cellWidth: 20 },
-      4: { cellWidth: 22 },
-      5: { cellWidth: 24 },
-      6: { cellWidth: 28 },
-      7: { cellWidth: 28 },
-      8: { cellWidth: 42 },
-      9: { cellWidth: 22 },
+      0:  { cellWidth: 26, fontStyle: 'bold', fontSize: 7 },  // Ticket
+      1:  { cellWidth: 38 },                                   // Título
+      2:  { cellWidth: 18, halign: 'center' },                 // Tipo
+      3:  { cellWidth: 18, halign: 'center', fontStyle: 'bold' }, // Prioridad
+      4:  { cellWidth: 20, halign: 'center', fontStyle: 'bold' }, // Estado
+      5:  { cellWidth: 22, halign: 'center' },                 // SLA
+      6:  { cellWidth: 26 },                                   // Técnico
+      7:  { cellWidth: 26 },                                   // Cliente
+      8:  { cellWidth: 26 },                                   // Teléfonos
+      9:  { cellWidth: 48 },                                   // Dirección (más ancho)
+      10: { cellWidth: 19, halign: 'center' },                 // Creada
     },
     didParseCell: (data) => {
-      if (data.section === 'body') {
-        // Color prioridad
-        if (data.column.index === 3) {
-          const inc = all[data.row.index];
-          const rgb = PRIORITY_COLOR_MAP[inc?.priority];
-          if (rgb) { data.cell.styles.textColor = rgb; data.cell.styles.fontStyle = 'bold'; }
-        }
-        // Color estado
-        if (data.column.index === 4) {
-          const inc = all[data.row.index];
-          const rgb = STATUS_COLOR_MAP[inc?.status];
-          if (rgb) { data.cell.styles.textColor = rgb; data.cell.styles.fontStyle = 'bold'; }
-        }
-        // Rojo SLA vencida
-        if (data.column.index === 5 && data.cell.text[0]?.startsWith('⚠')) {
-          data.cell.styles.textColor = [239, 68, 68];
-          data.cell.styles.fontStyle = 'bold';
-        }
+      if (data.section !== 'body') return;
+      const inc = all[data.row.index];
+      if (!inc) return;
+
+      // Prioridad en color
+      if (data.column.index === 3) {
+        const rgb = PRIORITY_COLOR_MAP[inc.priority];
+        if (rgb) data.cell.styles.textColor = rgb;
+      }
+      // Estado en color
+      if (data.column.index === 4) {
+        const rgb = STATUS_COLOR_MAP[inc.status];
+        if (rgb) data.cell.styles.textColor = rgb;
+      }
+      // SLA vencida en rojo
+      if (data.column.index === 5 && String(data.cell.text[0]).startsWith('⚠')) {
+        data.cell.styles.textColor = [239, 68, 68];
+        data.cell.styles.fontStyle = 'bold';
+      }
+      // Fila de incidencias escaladas con fondo amarillo suave
+      if (inc.escalated) {
+        data.cell.styles.fillColor = [255, 251, 235];
       }
     },
   });
 
-  // Footer
+  /* ── Footer en cada página ── */
   const pages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pages; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setTextColor(...GRAY);
     doc.setFont('helvetica', 'normal');
-    doc.text('IncidenciasISP — Documento generado automáticamente', 10, 205);
-    doc.text(`Página ${i} de ${pages}`, W - 10, 205, { align: 'right' });
+    doc.text('IncidenciasISP — Documento generado automáticamente. Uso interno.', 8, H - 5);
+    doc.text(`Página ${i} de ${pages}`, W - 8, H - 5, { align: 'right' });
     doc.setDrawColor(226, 232, 240);
-    doc.line(10, 203, W - 10, 203);
+    doc.line(8, H - 8, W - 8, H - 8);
   }
 
   const filename = `incidencias-${new Date().toISOString().slice(0, 10)}.pdf`;
