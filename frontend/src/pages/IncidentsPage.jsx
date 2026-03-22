@@ -42,11 +42,13 @@ export default function IncidentsPage() {
     socket.on('incident:created', refresh);
     socket.on('incident:status_changed', refresh);
     socket.on('incident:assigned', refresh);
+    socket.on('incident:updated', refresh);
     socket.on('incident:escalated', refresh);
     return () => {
       socket.off('incident:created', refresh);
       socket.off('incident:status_changed', refresh);
       socket.off('incident:assigned', refresh);
+      socket.off('incident:updated', refresh);
       socket.off('incident:escalated', refresh);
     };
   }, [socket]);

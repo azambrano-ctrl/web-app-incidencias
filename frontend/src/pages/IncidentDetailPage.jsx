@@ -98,6 +98,7 @@ export default function IncidentDetailPage() {
     const refresh = () => refetch();
     socket.on('incident:status_changed', refresh);
     socket.on('incident:assigned', refresh);
+    socket.on('incident:updated', refresh);
     socket.on('incident:comment', ({ comment: c }) => {
       qc.setQueryData(['incident', id], (old) => old ? { ...old, comments: [...(old.comments || []), c] } : old);
     });
@@ -105,6 +106,7 @@ export default function IncidentDetailPage() {
       socket.emit('leave:incident', id);
       socket.off('incident:status_changed', refresh);
       socket.off('incident:assigned', refresh);
+      socket.off('incident:updated', refresh);
       socket.off('incident:comment');
     };
   }, [socket, id]);
@@ -137,7 +139,12 @@ export default function IncidentDetailPage() {
 
   const updateMut = useMutation({
     mutationFn: (data) => updateIncident(id, data),
-    onSuccess: () => { toast.success('Incidencia actualizada'); setShowEdit(false); refetch(); },
+    onSuccess: () => {
+      toast.success('Incidencia actualizada');
+      setShowEdit(false);
+      refetch();
+      qc.invalidateQueries(['incidents']);
+    },
     onError: e => toast.error(e.response?.data?.error || 'Error'),
   });
 

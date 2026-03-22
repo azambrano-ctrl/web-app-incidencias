@@ -271,7 +271,11 @@ async function updateIncident(id, data) {
       client_name=$5, client_address=$6, client_phone=$7, client_phone2=$8, client_identificacion=$9, assigned_to=$10, updated_at=NOW()
     WHERE id=$11
   `, [title, description, type, priority, client_name, client_address, client_phone || null, client_phone2 || null, client_identificacion || null, assigned_to || null, id]);
-  return getIncident(id);
+  const updated = await getIncident(id);
+  emit('incident:updated', 'role:admin', { incident: updated });
+  emit('incident:updated', 'role:supervisor', { incident: updated });
+  if (updated.assigned_to) emit('incident:updated', `user:${updated.assigned_to}`, { incident: updated });
+  return updated;
 }
 
 async function addComment(incidentId, userId, body) {
