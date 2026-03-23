@@ -41,6 +41,57 @@ const CABLE_TYPES = [
   'Otro',
 ];
 
+// Hilos automáticos según tipo de cable
+const CABLE_HILOS = {
+  'Fibra monomodo 4H':  4,
+  'Fibra monomodo 8H':  8,
+  'Fibra monomodo 12H': 12,
+  'Fibra monomodo 24H': 24,
+  'Fibra monomodo 48H': 48,
+  'Fibra monomodo 96H': 96,
+  'ADSS 24H': 24,
+  'ADSS 48H': 48,
+  'UTP Cat6': 8,
+};
+
+// Colores TIA-598 (orden 1–12)
+const TIA598 = [
+  { n: 1,  nombre: 'Azul',     hex: '#1d4ed8' },
+  { n: 2,  nombre: 'Naranja',  hex: '#ea580c' },
+  { n: 3,  nombre: 'Verde',    hex: '#16a34a' },
+  { n: 4,  nombre: 'Marrón',   hex: '#92400e' },
+  { n: 5,  nombre: 'Pizarra',  hex: '#475569' },
+  { n: 6,  nombre: 'Blanco',   hex: '#e2e8f0', text: '#374151' },
+  { n: 7,  nombre: 'Rojo',     hex: '#dc2626' },
+  { n: 8,  nombre: 'Negro',    hex: '#1e293b' },
+  { n: 9,  nombre: 'Amarillo', hex: '#ca8a04' },
+  { n: 10, nombre: 'Violeta',  hex: '#7c3aed' },
+  { n: 11, nombre: 'Rosa',     hex: '#db2777' },
+  { n: 12, nombre: 'Aqua',     hex: '#0891b2' },
+];
+
+function isFiber(cableType) {
+  return cableType && (cableType.startsWith('Fibra') || cableType.startsWith('ADSS'));
+}
+
+// Genera grupos de tubos/hilos para un cable dado
+function buildFiberMap(total) {
+  if (!total || total === 0) return [];
+  const tubes = [];
+  let hilo = 1;
+  let tubeIdx = 0;
+  while (hilo <= total) {
+    const tubeColor = TIA598[tubeIdx % 12];
+    const fibers = [];
+    for (let i = 0; i < 12 && hilo <= total; i++, hilo++) {
+      fibers.push({ n: hilo, ...TIA598[i] });
+    }
+    tubes.push({ tube: tubeIdx + 1, tubeColor, fibers });
+    tubeIdx++;
+  }
+  return tubes;
+}
+
 const EMPTY_FORM = {
   type: 'caja',
   name: '',
@@ -250,7 +301,12 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
             Tipo de cable
             <select
-              value={form.cable_type} onChange={set('cable_type')}
+              value={form.cable_type}
+              onChange={e => {
+                const ct = e.target.value;
+                const auto = CABLE_HILOS[ct];
+                setForm(f => ({ ...f, cable_type: ct, total_hilos: auto !== undefined ? String(auto) : f.total_hilos }));
+              }}
               style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, background: '#fff', boxSizing: 'border-box' }}
             >
               <option value="">— Seleccionar —</option>
@@ -296,6 +352,50 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
               </div>
             </div>
           )}
+
+          {/* Código de colores TIA-598 — solo para fibra */}
+          {isFiber(form.cable_type) && form.total_hilos > 0 && (() => {
+            const tubes = buildFiberMap(Number(form.total_hilos));
+            return (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 8 }}>
+                  🎨 Código de colores TIA-598 — {form.total_hilos} hilos
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {tubes.map(tube => (
+                    <div key={tube.tube}>
+                      {tubes.length > 1 && (
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, background: tube.tubeColor.hex, border: '1px solid #d1d5db', display: 'inline-block' }} />
+                          Tubo {tube.tube} — {tube.tubeColor.nombre}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {tube.fibers.map(f => (
+                          <div
+                            key={f.n}
+                            title={`Hilo ${f.n}: ${f.nombre}`}
+                            style={{
+                              width: 36, height: 36, borderRadius: 6,
+                              background: f.hex,
+                              border: '2px solid rgba(255,255,255,.4)',
+                              boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                              display: 'flex', flexDirection: 'column',
+                              alignItems: 'center', justifyContent: 'center',
+                              cursor: 'default',
+                            }}
+                          >
+                            <span style={{ fontSize: 10, fontWeight: 800, color: f.text || '#fff', lineHeight: 1 }}>{f.n}</span>
+                            <span style={{ fontSize: 7, color: f.text || 'rgba(255,255,255,.85)', lineHeight: 1, marginTop: 1, textAlign: 'center' }}>{f.nombre.slice(0,4)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Descripción */}
           <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
