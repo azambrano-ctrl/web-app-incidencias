@@ -204,32 +204,29 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
   const cfg = NODE_CONFIG[form.type] || NODE_CONFIG.caja;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 3000,
-      background: 'rgba(0,0,0,.55)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', padding: 16,
-    }}>
-      <div style={{
-        background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480,
-        maxHeight: '90vh', overflowY: 'auto',
-        boxShadow: '0 20px 60px rgba(0,0,0,.3)',
-      }}>
-        {/* Header */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-              {initial?.id ? '✏️ Editar' : '📍 Registrar'} punto de red
-            </h2>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Caja, nodo o manga — documentar materiales utilizados</p>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>✕</button>
+    <div className="modal-overlay" style={{ zIndex: 3000 }}>
+      <div className="modal" style={{ maxWidth: 500 }}>
+
+        {/* Drag handle (solo visible en mobile bottom-sheet) */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 2 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 99, background: '#d1d5db' }} />
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* Header */}
+        <div className="modal-header">
+          <div>
+            <h2 style={{ margin: 0 }}>{initial?.id ? '✏️ Editar' : '📍 Registrar'} punto de red</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>Caja, nodo o manga — documentar materiales</p>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Tipo */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Tipo de punto *</label>
+            <label style={{ marginBottom: 8 }}>Tipo de punto *</label>
             <div style={{ display: 'flex', gap: 8 }}>
               {Object.entries(NODE_CONFIG).map(([key, c]) => (
                 <button
@@ -237,63 +234,65 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
                   type="button"
                   onClick={() => setForm(f => ({ ...f, type: key }))}
                   style={{
-                    flex: 1, padding: '8px 4px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                    border: `2px solid ${form.type === key ? c.color : '#e2e8f0'}`,
-                    background: form.type === key ? c.bg : '#f8fafc',
-                    color: form.type === key ? c.color : '#64748b',
-                    transition: 'all .15s',
+                    flex: 1, minHeight: 52, borderRadius: 10, cursor: 'pointer',
+                    fontSize: 14, fontWeight: 700,
+                    border: `2px solid ${form.type === key ? c.color : 'var(--border)'}`,
+                    background: form.type === key ? c.bg : 'var(--bg)',
+                    color: form.type === key ? c.color : 'var(--text-muted)',
+                    transition: 'all .15s', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', gap: 2,
                   }}
                 >
-                  {c.emoji} {c.label}
+                  <span style={{ fontSize: 20 }}>{c.emoji}</span>
+                  <span style={{ fontSize: 12 }}>{c.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Nombre */}
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+          <label>
             Nombre / Identificador *
             <input
               value={form.name} onChange={set('name')} required maxLength={100}
               placeholder="Ej: Caja-Sur-07, Nodo-Principal-B"
-              style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, boxSizing: 'border-box' }}
+              style={{ fontSize: 16 }}
             />
           </label>
 
-          {/* Ubicación GPS */}
+          {/* GPS — acción principal en móvil */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Ubicación *</label>
+            <label style={{ marginBottom: 8 }}>Ubicación GPS *</label>
             <button
               type="button"
               onClick={useGPS}
               disabled={gpsLoading}
               style={{
-                width: '100%', padding: '10px', borderRadius: 8, border: '2px dashed #3b82f6',
-                background: form.latitude ? '#eff6ff' : '#f8fafc', cursor: 'pointer',
-                fontSize: 13, fontWeight: 600, color: '#2563eb', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', gap: 8,
+                width: '100%', minHeight: 56, borderRadius: 10,
+                border: `2px ${form.latitude ? 'solid' : 'dashed'} ${form.latitude ? '#16a34a' : '#3b82f6'}`,
+                background: form.latitude ? '#f0fdf4' : '#eff6ff',
+                cursor: 'pointer', fontSize: 15, fontWeight: 700,
+                color: form.latitude ? '#166534' : '#1d4ed8',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               }}
             >
               {gpsLoading ? (
-                <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span> Obteniendo GPS...</>
+                <><span>⏳</span> Obteniendo señal GPS...</>
               ) : form.latitude ? (
-                <>📍 {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)} — Actualizar GPS</>
+                <><span>✅</span> {parseFloat(form.latitude).toFixed(5)}, {parseFloat(form.longitude).toFixed(5)}</>
               ) : (
-                <>📡 Usar mi ubicación GPS actual</>
+                <><span>📡</span> Marcar mi ubicación actual</>
               )}
             </button>
-            {/* Coordenadas manuales */}
+            {form.latitude && (
+              <button type="button" onClick={useGPS} disabled={gpsLoading}
+                style={{ marginTop: 6, width: '100%', padding: '8px', border: '1px solid var(--border)', background: 'var(--bg)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text-muted)' }}>
+                🔄 Actualizar GPS
+              </button>
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-              <input
-                value={form.latitude} onChange={set('latitude')}
-                placeholder="Latitud (-2.19616)"
-                style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
-              />
-              <input
-                value={form.longitude} onChange={set('longitude')}
-                placeholder="Longitud (-79.88621)"
-                style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 12 }}
-              />
+              <input value={form.latitude}  onChange={set('latitude')}  placeholder="Latitud"  style={{ flex: 1, fontSize: 13 }} />
+              <input value={form.longitude} onChange={set('longitude')} placeholder="Longitud" style={{ flex: 1, fontSize: 13 }} />
             </div>
           </div>
 
@@ -376,17 +375,17 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
                             key={f.n}
                             title={`Hilo ${f.n}: ${f.nombre}`}
                             style={{
-                              width: 36, height: 36, borderRadius: 6,
+                              width: 44, height: 44, borderRadius: 8,
                               background: f.hex,
                               border: '2px solid rgba(255,255,255,.4)',
-                              boxShadow: '0 1px 3px rgba(0,0,0,.2)',
+                              boxShadow: '0 1px 4px rgba(0,0,0,.25)',
                               display: 'flex', flexDirection: 'column',
                               alignItems: 'center', justifyContent: 'center',
-                              cursor: 'default',
+                              cursor: 'default', flexShrink: 0,
                             }}
                           >
-                            <span style={{ fontSize: 10, fontWeight: 800, color: f.text || '#fff', lineHeight: 1 }}>{f.n}</span>
-                            <span style={{ fontSize: 7, color: f.text || 'rgba(255,255,255,.85)', lineHeight: 1, marginTop: 1, textAlign: 'center' }}>{f.nombre.slice(0,4)}</span>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: f.text || '#fff', lineHeight: 1 }}>{f.n}</span>
+                            <span style={{ fontSize: 8, color: f.text || 'rgba(255,255,255,.85)', lineHeight: 1, marginTop: 2, textAlign: 'center' }}>{f.nombre.slice(0,4)}</span>
                           </div>
                         ))}
                       </div>
@@ -398,41 +397,36 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
           })()}
 
           {/* Descripción */}
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+          <label>
             Descripción / trabajo realizado
             <textarea
               value={form.description} onChange={set('description')} rows={2} maxLength={1000}
               placeholder="Ej: Empalme de fibra, splitter 1:8 instalado..."
-              style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              style={{ fontSize: 15, resize: 'vertical' }}
             />
           </label>
 
-          {/* Notas adicionales */}
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+          {/* Notas */}
+          <label>
             Notas adicionales
             <textarea
               value={form.notes} onChange={set('notes')} rows={2} maxLength={2000}
               placeholder="Observaciones, materiales adicionales..."
-              style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 10px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+              style={{ fontSize: 15, resize: 'vertical' }}
             />
           </label>
 
+          </div>{/* end modal-body */}
+
           {/* Botones */}
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button
-              type="button" onClick={onClose}
-              style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#f8fafc', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-            >
+          <div className="form-actions" style={{ gap: 10 }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ minHeight: 48 }}>
               Cancelar
             </button>
             <button
               type="submit" disabled={isPending}
-              style={{
-                flex: 2, padding: '10px', borderRadius: 8, border: 'none',
-                background: isPending ? '#94a3b8' : cfg.color,
-                color: '#fff', cursor: isPending ? 'not-allowed' : 'pointer',
-                fontSize: 13, fontWeight: 700,
-              }}
+              className="btn btn-primary"
+              style={{ minHeight: 48, flex: 2, background: isPending ? '#94a3b8' : cfg.color, fontSize: 15, fontWeight: 700 }}
             >
               {isPending ? '⏳ Guardando...' : (initial?.id ? '✅ Guardar cambios' : `📍 Registrar ${cfg.label}`)}
             </button>
@@ -743,6 +737,22 @@ export default function MapPage() {
       </main>
 
       <BottomNav />
+
+      {/* FAB móvil — botón flotante para registrar punto rápido */}
+      <button
+        onClick={() => setNodeModal({ open: true, initial: null })}
+        aria-label="Registrar punto de red"
+        style={{
+          position: 'fixed', bottom: 76, right: 16, zIndex: 2000,
+          width: 56, height: 56, borderRadius: '50%',
+          background: '#16a34a', color: '#fff', border: 'none',
+          fontSize: 26, cursor: 'pointer',
+          boxShadow: '0 4px 16px rgba(22,163,74,.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        +
+      </button>
 
       {/* Modal registrar/editar nodo */}
       <NodeModal
