@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { getMapIncidents, regeocodeIncidents } from '../api/incidents.api';
 import { getNetworkNodes, createNetworkNode, updateNetworkNode, deleteNetworkNode } from '../api/network.api';
+import KmzImporter from '../components/network/KmzImporter';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
@@ -611,6 +612,7 @@ export default function MapPage() {
   const [showIncidents,   setShowIncidents]   = useState(true);
   const [showNodes,       setShowNodes]       = useState(true);
   const [nodeModal,       setNodeModal]       = useState({ open: false, initial: null });
+  const [showKmzImport,   setShowKmzImport]   = useState(false);
 
   const isAdmin = ['admin','supervisor'].includes(user?.role);
 
@@ -851,6 +853,16 @@ export default function MapPage() {
               + Registrar punto
             </button>
 
+            {/* Importar KMZ — solo admin/supervisor */}
+            {isAdmin && (
+              <button
+                onClick={() => setShowKmzImport(true)}
+                style={{ fontSize: 12, background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 700 }}
+              >
+                📂 Importar KMZ
+              </button>
+            )}
+
             {withoutCoords.length > 0 && (
               <button
                 onClick={() => setShowNoCoords(v => !v)}
@@ -919,6 +931,9 @@ export default function MapPage() {
       </main>
 
       <BottomNav />
+
+      {/* KMZ Importer */}
+      {showKmzImport && <KmzImporter onClose={() => setShowKmzImport(false)} />}
 
       {/* FAB móvil — botón flotante para registrar punto rápido */}
       <button
