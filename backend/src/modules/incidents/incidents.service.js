@@ -7,7 +7,7 @@ const { createExternalIncident } = require('../../services/external.service');
 const { geocodeAddress } = require('../../services/geocoding.service');
 const { addBusinessHours } = require('../../utils/businessHours');
 
-// Horas HÁBILES por prioridad (8:30–18:00, lun–sáb)
+// Horas HÁBILES por prioridad (8:30–18:00, lun–vie)
 const SLA_HOURS = { critical: 2, high: 4, medium: 8, low: 16 };
 
 // Escapa caracteres HTML para prevenir XSS en emails

@@ -1,5 +1,5 @@
 /**
- * Horario hábil: lunes–sábado 08:30–18:00 hora Ecuador (UTC-5)
+ * Horario hábil: lunes–viernes 08:30–18:00 hora Ecuador (UTC-5)
  */
 const UTC_OFFSET_MS = -5 * 3600000; // Ecuador = UTC-5
 const START_MINS = 8 * 60 + 30;     // 510  (08:30)
@@ -17,9 +17,10 @@ function toUTC(localDate) {
   return new Date(localDate.getTime() - UTC_OFFSET_MS);
 }
 
-/** Lunes–Sábado son días hábiles (getUTCDay(): 0=dom,6=sáb) */
+/** Lunes–Viernes son días hábiles (getUTCDay(): 0=dom,6=sáb) */
 function isBusinessDay(localDate) {
-  return localDate.getUTCDay() !== 0; // excluye domingo
+  const day = localDate.getUTCDay();
+  return day !== 0 && day !== 6; // excluye sábado y domingo
 }
 
 function businessStartOfDay(localDate) {
@@ -28,12 +29,12 @@ function businessStartOfDay(localDate) {
   return d;
 }
 
-/** Siguiente inicio de jornada (saltando domingos) */
+/** Siguiente inicio de jornada (saltando sábados y domingos) */
 function nextBusinessStart(localDate) {
   const d = new Date(localDate);
   d.setUTCDate(d.getUTCDate() + 1);
   d.setUTCHours(8, 30, 0, 0);
-  while (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1); // saltar domingos
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1); // saltar fines de semana
   return d;
 }
 
@@ -90,7 +91,7 @@ function businessMinutesUntil(dueAtUTC) {
     const day = cur.getUTCDay();
     const minsNow = cur.getUTCHours() * 60 + cur.getUTCMinutes();
 
-    if (day === 0 || minsNow >= END_MINS) {
+    if (day === 0 || day === 6 || minsNow >= END_MINS) {
       cur = nextBusinessStart(cur);
       continue;
     }
