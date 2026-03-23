@@ -14,3 +14,6 @@ export const updateNetworkNode = (id, data) =>
 
 export const deleteNetworkNode = (id) =>
   api.delete(`/network/${id}`).then(r => r.data);
+
+export const deleteAllNetworkNodes = () =>
+  api.delete('/network').then(r => r.data);

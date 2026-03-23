@@ -71,4 +71,10 @@ async function deleteNode(id) {
   if (!rowCount) throw Object.assign(new Error('Nodo no encontrado'), { status: 404 });
 }
 
-module.exports = { listNodes, getNode, createNode, updateNode, deleteNode };
+async function deleteAllNodes() {
+  const db = getDb();
+  const { rowCount } = await db.query('DELETE FROM network_nodes');
+  return { deleted: rowCount };
+}
+
+module.exports = { listNodes, getNode, createNode, updateNode, deleteNode, deleteAllNodes };

@@ -53,6 +53,11 @@ router.put('/:id', nodeValidation, validate, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// DELETE /api/v1/network — borrar TODOS los nodos (solo admin)
+router.delete('/', authorize('admin'), async (req, res, next) => {
+  try { res.json(await svc.deleteAllNodes()); } catch (e) { next(e); }
+});
+
 // DELETE /api/v1/network/:id — solo admin/supervisor
 router.delete('/:id', authorize('admin','supervisor'), async (req, res, next) => {
   try { await svc.deleteNode(Number(req.params.id)); res.json({ ok: true }); } catch (e) { next(e); }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { getMapIncidents, regeocodeIncidents } from '../api/incidents.api';
-import { getNetworkNodes, createNetworkNode, updateNetworkNode, deleteNetworkNode } from '../api/network.api';
+import { getNetworkNodes, createNetworkNode, updateNetworkNode, deleteNetworkNode, deleteAllNetworkNodes } from '../api/network.api';
 import KmzImporter from '../components/network/KmzImporter';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/layout/Sidebar';
@@ -644,6 +644,12 @@ export default function MapPage() {
     onError:   () => toast.error('Error al eliminar nodo'),
   });
 
+  const deleteAllMut = useMutation({
+    mutationFn: deleteAllNetworkNodes,
+    onSuccess: (res) => { qc.invalidateQueries(['network-nodes']); toast.success(`🗑 ${res.deleted} nodos eliminados`); },
+    onError:   () => toast.error('Error al borrar la red'),
+  });
+
   const withCoords    = allIncidents.filter(i => i.latitude != null && i.longitude != null);
   const withoutCoords = allIncidents.filter(i => i.latitude == null || i.longitude == null);
 
@@ -898,6 +904,21 @@ export default function MapPage() {
                 style={{ fontSize: 12, background: '#0ea5e9', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 700 }}
               >
                 📂 Importar KMZ
+              </button>
+            )}
+
+            {/* Borrar toda la red — solo admin */}
+            {user?.role === 'admin' && networkNodes.length > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm(`¿Borrar los ${networkNodes.length} puntos de red? Esta acción no se puede deshacer.`)) {
+                    deleteAllMut.mutate();
+                  }
+                }}
+                disabled={deleteAllMut.isPending}
+                style={{ fontSize: 12, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontWeight: 600 }}
+              >
+                {deleteAllMut.isPending ? '⏳' : '🗑'} Borrar red ({networkNodes.length})
               </button>
             )}
 
