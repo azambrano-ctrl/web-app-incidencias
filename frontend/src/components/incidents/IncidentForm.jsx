@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { searchClients } from '../../api/clients.api';
+import { searchClients, updateClient } from '../../api/clients.api';
 import { getUsers } from '../../api/users.api';
+import { toast } from 'react-hot-toast';
 
 const EMPTY = {
   title: '', description: '', type: 'internet', priority: 'medium',
@@ -13,6 +14,8 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [technicians, setTechnicians] = useState([]);
+  const [selectedClient, setSelectedClient] = useState(null); // { id, celular1, celular2 } del cliente seleccionado
+  const [updateContact, setUpdateContact] = useState(false);  // checkbox "actualizar en directorio"
   const searchTimer = useRef(null);
   const suggestRef = useRef(null);
 
@@ -47,6 +50,8 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
     const fullName = c.razon_social ||
       [c.nombre1, c.nombre2, c.apellido1, c.apellido2].filter(Boolean).join(' ');
     setClientQuery(fullName);
+    setSelectedClient({ id: c.id, celular1: c.celular1 || '', celular2: c.celular2 || '' });
+    setUpdateContact(false);
     setForm(f => ({
       ...f,
       client_name: fullName,
@@ -65,10 +70,28 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
     if (val.length < 2) setShowSuggestions(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    // Si el usuario quiere actualizar el contacto en el directorio
+    if (updateContact && selectedClient) {
+      try {
+        await updateClient(selectedClient.id, {
+          celular1: form.client_phone,
+          celular2: form.client_phone2,
+        });
+        toast.success('📋 Teléfono actualizado en el directorio');
+      } catch {
+        toast.error('No se pudo actualizar el directorio (la incidencia se creará igual)');
+      }
+    }
     onSubmit(form);
   };
+
+  // Detectar si el teléfono fue modificado respecto al cliente original
+  const phoneChanged = selectedClient && (
+    form.client_phone !== selectedClient.celular1 ||
+    form.client_phone2 !== selectedClient.celular2
+  );
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -156,6 +179,26 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
               <input value={form.client_phone2} onChange={e => set('client_phone2', e.target.value)} placeholder="Opcional" />
             </label>
           </div>
+
+          {/* Checkbox: actualizar teléfono en el directorio si fue modificado */}
+          {phoneChanged && (
+            <div className="form-row">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 400, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={updateContact}
+                  onChange={e => setUpdateContact(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: '#2563eb', flexShrink: 0 }}
+                />
+                <span>
+                  📋 Actualizar este teléfono en el directorio del cliente
+                  <span style={{ color: '#94a3b8', marginLeft: 4 }}>
+                    (antes: {selectedClient.celular1 || '—'})
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
           <div className="form-row">
             <label>Técnico asignado
               <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>

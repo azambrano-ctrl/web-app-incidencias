@@ -8,3 +8,6 @@ export const searchClients = (q) =>
 
 export const getClientStats = () =>
   api.get('/clients/stats').then(r => r.data);
+
+export const updateClient = (id, data) =>
+  api.patch(`/clients/${id}`, data).then(r => r.data);

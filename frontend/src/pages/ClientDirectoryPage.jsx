@@ -1,16 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import BottomNav from '../components/layout/BottomNav';
 import { searchClients, getPhoto } from '../api/incidents.api';
+import { updateClient } from '../api/clients.api';
 
 export default function ClientDirectoryPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [editingClient, setEditingClient] = useState(null);
   const timerRef = useRef(null);
+  const qc = useQueryClient();
 
   useEffect(() => {
     clearTimeout(timerRef.current);
@@ -22,6 +26,16 @@ export default function ClientDirectoryPage() {
     queryKey: ['clients-search', debouncedSearch],
     queryFn: () => searchClients(debouncedSearch),
     enabled: debouncedSearch.length >= 2,
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }) => updateClient(id, data),
+    onSuccess: () => {
+      toast.success('Cliente actualizado');
+      qc.invalidateQueries(['clients-search']);
+      setEditingClient(null);
+    },
+    onError: () => toast.error('Error al actualizar cliente'),
   });
 
   return (
@@ -63,6 +77,7 @@ export default function ClientDirectoryPage() {
                   key={client.id}
                   client={client}
                   onViewIncident={client.incident_id ? () => navigate(`/incidencias/${client.incident_id}`) : null}
+                  onEdit={() => setEditingClient(client)}
                 />
               ))}
             </div>
@@ -70,11 +85,20 @@ export default function ClientDirectoryPage() {
         </div>
         <BottomNav />
       </main>
+
+      {editingClient && (
+        <EditClientModal
+          client={editingClient}
+          saving={updateMut.isPending}
+          onSave={(data) => updateMut.mutate({ id: editingClient.id, data })}
+          onClose={() => setEditingClient(null)}
+        />
+      )}
     </div>
   );
 }
 
-function ClientCard({ client, onViewIncident }) {
+function ClientCard({ client, onViewIncident, onEdit }) {
   const [photoSrc, setPhotoSrc] = useState(null);
 
   useEffect(() => {
@@ -131,6 +155,13 @@ function ClientCard({ client, onViewIncident }) {
         )}
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+          <button
+            className="btn btn-sm btn-secondary"
+            onClick={onEdit}
+            style={{ fontSize: 13 }}
+          >
+            ✏️ Editar contacto
+          </button>
           {onViewIncident && (
             <button className="btn btn-sm" onClick={onViewIncident} style={{ fontSize: 13 }}>
               Ver incidencia
@@ -148,6 +179,129 @@ function ClientCard({ client, onViewIncident }) {
             </a>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EditClientModal({ client, saving, onSave, onClose }) {
+  const displayName = client.nombre_display || client.razon_social || '—';
+  const [form, setForm] = useState({
+    celular1:  client.celular1  || '',
+    celular2:  client.celular2  || '',
+    email:     client.email     || '',
+    direccion: client.direccion || '',
+    sector:    client.sector    || '',
+  });
+
+  function handleChange(e) {
+    setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    onSave(form);
+  }
+
+  return (
+    <div className="modal-overlay" style={{ zIndex: 4000 }}>
+      <div className="modal modal-sm">
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 2 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 99, background: '#d1d5db' }} />
+        </div>
+
+        <div className="modal-header">
+          <div>
+            <h2 style={{ margin: 0 }}>✏️ Editar contacto</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+              {displayName} {client.identificacion ? `· CI ${client.identificacion}` : ''}
+            </p>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            <div className="form-group">
+              <label className="form-label">📞 Teléfono / Celular principal</label>
+              <input
+                name="celular1"
+                value={form.celular1}
+                onChange={handleChange}
+                className="form-input"
+                type="tel"
+                placeholder="0999 000 000"
+                style={{ fontSize: 16 }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">📞 Teléfono / Celular secundario</label>
+              <input
+                name="celular2"
+                value={form.celular2}
+                onChange={handleChange}
+                className="form-input"
+                type="tel"
+                placeholder="(Opcional)"
+                style={{ fontSize: 16 }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">✉️ Email</label>
+              <input
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                className="form-input"
+                type="email"
+                placeholder="correo@ejemplo.com"
+                style={{ fontSize: 16 }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">📍 Dirección</label>
+              <input
+                name="direccion"
+                value={form.direccion}
+                onChange={handleChange}
+                className="form-input"
+                placeholder="Dirección del cliente"
+                style={{ fontSize: 16 }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">🏘️ Sector</label>
+              <input
+                name="sector"
+                value={form.sector}
+                onChange={handleChange}
+                className="form-input"
+                placeholder="Sector o barrio"
+                style={{ fontSize: 16 }}
+              />
+            </div>
+
+          </div>
+
+          <div className="form-actions" style={{ gap: 10 }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ minHeight: 48 }}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="btn btn-primary"
+              style={{ minHeight: 48, flex: 2 }}
+            >
+              {saving ? '⏳ Guardando...' : '💾 Guardar cambios'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

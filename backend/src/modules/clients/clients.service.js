@@ -67,6 +67,23 @@ async function searchClients(q, limit = 10) {
   return rows;
 }
 
+async function updateClient(id, data) {
+  const db = getDb();
+  const { celular1, celular2, email, direccion, sector } = data;
+  const { rows } = await db.query(`
+    UPDATE clients SET
+      celular1  = COALESCE(NULLIF($1,''), celular1),
+      celular2  = $2,
+      email     = $3,
+      direccion = COALESCE(NULLIF($4,''), direccion),
+      sector    = COALESCE(NULLIF($5,''), sector)
+    WHERE id = $6
+    RETURNING *
+  `, [celular1 ?? null, celular2 ?? null, email ?? null, direccion ?? null, sector ?? null, id]);
+  if (!rows[0]) throw Object.assign(new Error('Cliente no encontrado'), { status: 404 });
+  return rows[0];
+}
+
 async function getStats() {
   const db = getDb();
   const { rows: [total] } = await db.query('SELECT COUNT(*) as total FROM clients');
@@ -77,4 +94,4 @@ async function getStats() {
   return { total: parseInt(total.total), sectors };
 }
 
-module.exports = { importClients, searchClients, getStats };
+module.exports = { importClients, searchClients, getStats, updateClient };

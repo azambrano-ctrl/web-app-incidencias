@@ -26,4 +26,13 @@ router.get('/stats', authorize('admin', 'supervisor'), async (req, res, next) =>
   try { res.json(await svc.getStats()); } catch (e) { next(e); }
 });
 
+// PATCH /api/v1/clients/:id — actualizar datos de contacto (todos los roles)
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID inválido' });
+    res.json(await svc.updateClient(id, req.body));
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
