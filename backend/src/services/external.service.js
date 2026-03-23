@@ -75,8 +75,11 @@ async function createExternalIncident(incident) {
   const res = await request(baseUrl, 'POST', '/api/v1/incidence', body, token);
   if (res.status >= 400) {
     console.error('[ExtAPI] Error al crear incidencia externa, status:', res.status);
+    return null;
   }
-  return res.data;
+  const externalId = res.data?.data?.incidence_id ?? null;
+  console.log(`[ExtAPI] Incidencia creada en sistema externo, external_id: ${externalId}`);
+  return externalId;
 }
 
 // Resetear token en memoria al cambiar credenciales

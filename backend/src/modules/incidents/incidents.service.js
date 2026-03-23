@@ -164,8 +164,13 @@ async function createIncident(data, createdBy) {
   emit('incident:created', 'role:admin', inc);
   emit('incident:created', 'role:supervisor', inc);
 
-  // Enviar al sistema externo (no bloquea si falla)
-  createExternalIncident(inc).catch(e => console.error('[ExtAPI] Error al crear:', e.message));
+  // Enviar al sistema externo y guardar el ID externo retornado
+  createExternalIncident(inc).then(externalId => {
+    if (externalId) {
+      db.query('UPDATE incidents SET external_id=$1 WHERE id=$2', [externalId, inc.id])
+        .catch(e => console.error('[ExtAPI] Error guardando external_id:', e.message));
+    }
+  }).catch(e => console.error('[ExtAPI] Error al crear:', e.message));
 
   return inc;
 }

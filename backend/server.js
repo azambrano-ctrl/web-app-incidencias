@@ -10,6 +10,7 @@ const { runMigrations004 } = require('./src/db/migrations/004_audit_log');
 const { runMigrations005 } = require('./src/db/migrations/005_network_nodes');
 const { runMigrations006 } = require('./src/db/migrations/006_network_splices');
 const { runMigrations007 } = require('./src/db/migrations/007_network_layer');
+const { runMigrations008 } = require('./src/db/migrations/008_external_id');
 const { runSeeds } = require('./src/db/seeds/001_admin');
 const { startReminderJob, setIo: setReminderIo } = require('./src/jobs/reminder.job');
 const { setIo: setIncidentsIo } = require('./src/modules/incidents/incidents.service');
@@ -38,6 +39,7 @@ async function main() {
   await runMigrations005();
   await runMigrations006();
   await runMigrations007();
+  await runMigrations008();
   await runSeeds();
 
   // 2b. Validar configuración de APIs externas (advertencia, no fatal)
