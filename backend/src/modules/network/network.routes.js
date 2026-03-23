@@ -18,6 +18,7 @@ const nodeValidation = [
   body('hilos_used').optional().isInt({ min: 0, max: 9999 }),
   body('description').optional({ nullable: true }).isLength({ max: 1000 }).customSanitizer(stripTags),
   body('notes').optional({ nullable: true }).isLength({ max: 2000 }).customSanitizer(stripTags),
+  body('layer').optional({ nullable: true }).isLength({ max: 200 }).customSanitizer(stripTags),
 ];
 
 function validate(req, res, next) {

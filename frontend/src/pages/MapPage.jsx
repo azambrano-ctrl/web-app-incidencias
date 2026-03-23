@@ -611,6 +611,7 @@ export default function MapPage() {
   const [showNoCoords,    setShowNoCoords]    = useState(false);
   const [showIncidents,   setShowIncidents]   = useState(true);
   const [showNodes,       setShowNodes]       = useState(true);
+  const [hiddenLayers,    setHiddenLayers]    = useState(new Set()); // layer names that are OFF
   const [nodeModal,       setNodeModal]       = useState({ open: false, initial: null });
   const [showKmzImport,   setShowKmzImport]   = useState(false);
 
@@ -645,6 +646,19 @@ export default function MapPage() {
 
   const withCoords    = allIncidents.filter(i => i.latitude != null && i.longitude != null);
   const withoutCoords = allIncidents.filter(i => i.latitude == null || i.longitude == null);
+
+  // Capas únicas de nodos de red (de importaciones KMZ)
+  const networkLayers = [...new Set(networkNodes.map(n => n.layer).filter(Boolean))].sort();
+  // Nodos visibles según capas activas (capas ocultas se excluyen; nodos sin capa siempre visibles)
+  const visibleNodes  = networkNodes.filter(n => !n.layer || !hiddenLayers.has(n.layer));
+
+  function toggleLayer(name) {
+    setHiddenLayers(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  }
 
   /* ── Inicializar / actualizar mapa ── */
   useEffect(() => {
@@ -720,7 +734,7 @@ export default function MapPage() {
 
       // ── Marcadores de nodos de red ──
       if (showNodes) {
-        networkNodes.forEach(node => {
+        visibleNodes.forEach(node => {
           const lat = parseFloat(node.latitude);
           const lng = parseFloat(node.longitude);
           if (isNaN(lat) || isNaN(lng)) return;
@@ -772,7 +786,8 @@ export default function MapPage() {
                   <div style="display:flex;flex-wrap:wrap;">${chips}</div>
                 </div>`;
               })()}
-              <div style="font-size:10px;color:#94a3b8;margin-top:6px;">Por: ${node.created_by_name || '—'}</div>
+              ${node.layer ? `<div style="font-size:10px;color:#7c3aed;margin-top:4px;font-weight:600;">📂 ${node.layer}</div>` : ''}
+              <div style="font-size:10px;color:#94a3b8;margin-top:2px;">Por: ${node.created_by_name || '—'}</div>
               <div style="display:flex;gap:6px;margin-top:8px;">${editBtn}${delBtn}</div>
             </div>`;
 
@@ -812,7 +827,7 @@ export default function MapPage() {
         leafletRef.current._viewSet = true;
       }
     });
-  }, [allIncidents, networkNodes, showIncidents, showNodes, navigate, isAdmin]);
+  }, [allIncidents, visibleNodes, showIncidents, showNodes, navigate, isAdmin]);
 
   useEffect(() => {
     return () => {
@@ -844,6 +859,29 @@ export default function MapPage() {
             >
               📡 Red {networkNodes.length > 0 ? `(${networkNodes.length})` : ''} {showNodes ? '●' : '○'}
             </button>
+
+            {/* Chips de capas KMZ — visibles cuando Red está activo y hay capas */}
+            {showNodes && networkLayers.map(layer => {
+              const isActive = !hiddenLayers.has(layer);
+              const count    = networkNodes.filter(n => n.layer === layer).length;
+              const label    = layer.length > 18 ? layer.slice(0, 16) + '…' : layer;
+              return (
+                <button
+                  key={layer}
+                  onClick={() => toggleLayer(layer)}
+                  title={layer}
+                  style={{
+                    fontSize: 11, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontWeight: 600,
+                    background: isActive ? '#f0fdf4' : '#f8fafc',
+                    color:      isActive ? '#16a34a' : '#94a3b8',
+                    border:     `1px solid ${isActive ? '#86efac' : '#d1d5db'}`,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  📂 {label} ({count}) {isActive ? '●' : '○'}
+                </button>
+              );
+            })}
 
             {/* Registrar nuevo nodo */}
             <button
