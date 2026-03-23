@@ -778,9 +778,11 @@ export default function IncidentDetailPage() {
                 </>
               )}
 
-              <label style={{ marginTop: 12 }}>Comentario adicional
-                <textarea value={statusComment} onChange={e => setStatusComment(e.target.value)} rows={2} placeholder="Observaciones opcionales..." />
-              </label>
+              {user?.role !== 'technician' && (
+                <label style={{ marginTop: 12 }}>Comentario adicional
+                  <textarea value={statusComment} onChange={e => setStatusComment(e.target.value)} rows={2} placeholder="Observaciones opcionales..." />
+                </label>
+              )}
             </div>
             <div className="form-actions">
               <button className="btn btn-secondary" onClick={() => { setShowStatusModal(false); setSolution(''); setNewStatus(''); }}>Cancelar</button>
