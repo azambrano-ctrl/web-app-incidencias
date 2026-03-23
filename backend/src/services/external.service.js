@@ -51,9 +51,10 @@ async function getToken() {
   if (!baseUrl || !username || !password) throw new Error('API externa no configurada');
 
   const res = await request(baseUrl, 'POST', '/api/v1/users/sign/in', { username, password });
-  if (!res.data?.token) throw new Error('No se pudo autenticar en API externa');
+  const token = res.data?.data?.access;
+  if (!token) throw new Error('No se pudo autenticar en API externa');
 
-  _token = res.data.token;
+  _token = token;
   _tokenExpiry = Date.now() + 55 * 60 * 1000; // 55 minutos
   return _token;
 }

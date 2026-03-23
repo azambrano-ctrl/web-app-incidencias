@@ -6,6 +6,7 @@ const { getSettings, setSettings } = require('./settings.service');
 const { sendEmail } = require('../../services/email.service');
 const { sendWhatsApp } = require('../../services/whatsapp.service');
 const { ensureVapidKeys, subscribe, unsubscribe } = require('../../services/push.service');
+const { resetToken } = require('../../services/external.service');
 
 const SETTING_KEYS = [
   'email_enabled', 'email_host', 'email_port', 'email_secure',
@@ -15,10 +16,11 @@ const SETTING_KEYS = [
   'default_city',   // ciudad por defecto para geocodificación del mapa
   'map_bbox',       // bounding box para restringir geocodificación al área local (minLon,maxLat,maxLon,minLat)
   'google_maps_key', // API key de Google Maps Geocoding (opcional, mejora precisión)
+  'ext_api_enabled', 'ext_api_url', 'ext_api_user', 'ext_api_pass', // API externa TRONCALNET
 ];
 
 // Claves que NUNCA se devuelven al cliente (passwords, tokens, API keys)
-const SENSITIVE_KEYS = new Set(['email_pass', 'whatsapp_token', 'google_maps_key', 'push_vapid_private']);
+const SENSITIVE_KEYS = new Set(['email_pass', 'whatsapp_token', 'google_maps_key', 'push_vapid_private', 'ext_api_pass']);
 
 router.get('/', authenticate, authorize('admin'), async (req, res, next) => {
   try {
@@ -39,6 +41,8 @@ router.put('/', authenticate, authorize('admin'), async (req, res, next) => {
       if (allowed.has(k)) toSave[k] = v;
     }
     await setSettings(toSave);
+    // Si cambiaron credenciales de API externa, invalidar token en caché
+    if (['ext_api_url', 'ext_api_user', 'ext_api_pass'].some(k => k in toSave)) resetToken();
     // Auditar qué claves se cambiaron (sin los valores sensibles)
     const changedKeys = Object.keys(toSave).filter(k => !SENSITIVE_KEYS.has(k));
     await audit(req.user.id, 'settings:update', 'settings', null, { keys: changedKeys }, req.ip);
