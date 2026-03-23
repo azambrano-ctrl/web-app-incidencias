@@ -484,9 +484,10 @@ export default function MapPage() {
   const mapRef     = useRef(null);
   const leafletRef = useRef(null);
 
-  const [showNoCoords,  setShowNoCoords]  = useState(false);
-  const [showNodes,     setShowNodes]     = useState(true);
-  const [nodeModal,     setNodeModal]     = useState({ open: false, initial: null });
+  const [showNoCoords,    setShowNoCoords]    = useState(false);
+  const [showIncidents,   setShowIncidents]   = useState(true);
+  const [showNodes,       setShowNodes]       = useState(true);
+  const [nodeModal,       setNodeModal]       = useState({ open: false, initial: null });
 
   const isAdmin = ['admin','supervisor'].includes(user?.role);
 
@@ -546,7 +547,7 @@ export default function MapPage() {
       });
 
       // ── Marcadores de incidencias ──
-      withCoords.forEach(inc => {
+      if (showIncidents) withCoords.forEach(inc => {
         const lat = parseFloat(inc.latitude);
         const lng = parseFloat(inc.longitude);
         if (isNaN(lat) || isNaN(lng)) return;
@@ -669,7 +670,7 @@ export default function MapPage() {
         leafletRef.current._viewSet = true;
       }
     });
-  }, [allIncidents, networkNodes, showNodes, navigate, isAdmin]);
+  }, [allIncidents, networkNodes, showIncidents, showNodes, navigate, isAdmin]);
 
   useEffect(() => {
     return () => {
@@ -686,9 +687,13 @@ export default function MapPage() {
 
           {/* Barra de controles */}
           <div style={{ padding: '10px 16px', background: '#fff', borderBottom: '1px solid var(--border)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700 }}>
-              🗺️ {withCoords.length} incidencias
-            </span>
+            {/* Botón incidencias */}
+            <button
+              onClick={() => setShowIncidents(v => !v)}
+              style={{ fontSize: 12, background: showIncidents ? '#eff6ff' : '#f8fafc', color: showIncidents ? '#2563eb' : '#64748b', border: `1px solid ${showIncidents ? '#93c5fd' : '#d1d5db'}`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontWeight: 600 }}
+            >
+              🎫 Incidencias {withCoords.length > 0 ? `(${withCoords.length})` : ''} {showIncidents ? '●' : '○'}
+            </button>
 
             {/* Botón nodos */}
             <button
