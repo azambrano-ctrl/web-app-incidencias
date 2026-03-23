@@ -70,9 +70,10 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
     if (val.length < 2) setShowSuggestions(false);
   };
 
+  const TYPE_LABELS = { internet: 'Internet', tv: 'TV Cable', both: 'Internet + TV' };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Si el usuario quiere actualizar el contacto en el directorio
     if (updateContact && selectedClient) {
       try {
         await updateClient(selectedClient.id, {
@@ -84,7 +85,8 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
         toast.error('No se pudo actualizar el directorio (la incidencia se creará igual)');
       }
     }
-    onSubmit(form);
+    const autoTitle = `${TYPE_LABELS[form.type] || form.type}${form.client_name ? ' - ' + form.client_name : ''}`;
+    onSubmit({ ...form, title: form.title || autoTitle });
   };
 
   // Detectar si el teléfono fue modificado respecto al cliente original
@@ -101,11 +103,6 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
           <button className="modal-close" onClick={onCancel}>✕</button>
         </div>
         <form onSubmit={handleSubmit} className="incident-form">
-          <div className="form-row">
-            <label>Título *
-              <input value={form.title} onChange={e => set('title', e.target.value)} required placeholder="Ej: Sin señal de internet" />
-            </label>
-          </div>
           <div className="form-row">
             <label>Descripción *
               <textarea value={form.description} onChange={e => set('description', e.target.value)} required rows={3} placeholder="Describe el problema..." />
