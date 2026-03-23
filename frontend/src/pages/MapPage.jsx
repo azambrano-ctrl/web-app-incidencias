@@ -21,10 +21,45 @@ const LEGEND = [
 ];
 
 const NODE_CONFIG = {
-  caja:  { color: '#16a34a', bg: '#dcfce7', emoji: '📦', label: 'Caja' },
-  nodo:  { color: '#7c3aed', bg: '#ede9fe', emoji: '🔵', label: 'Nodo' },
-  manga: { color: '#ea580c', bg: '#ffedd5', emoji: '🟠', label: 'Manga' },
+  caja:  { color: '#16a34a', bg: '#dcfce7', label: 'Caja' },
+  nodo:  { color: '#7c3aed', bg: '#ede9fe', label: 'Nodo' },
+  manga: { color: '#ea580c', bg: '#ffedd5', label: 'Manga' },
 };
+
+// SVG icons (24×24, stroke-based)
+const NODE_ICONS = {
+  caja: (color = 'currentColor', size = 24) => `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
+      fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>
+      <path d="M12 22V12"/>
+      <polyline points="3.29 7 12 12 20.71 7"/>
+      <path d="m7.5 4.27 9 5.15"/>
+    </svg>`,
+  nodo: (color = 'currentColor', size = 24) => `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
+      fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="16" y="16" width="6" height="6" rx="1"/>
+      <rect x="2" y="16" width="6" height="6" rx="1"/>
+      <rect x="9" y="2" width="6" height="6" rx="1"/>
+      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/>
+      <path d="M12 12V8"/>
+    </svg>`,
+  manga: (color = 'currentColor', size = 24) => `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24"
+      fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+      <path d="M3 12a9 3 0 0 0 18 0"/>
+    </svg>`,
+};
+
+// Componente React SVG para usar en JSX
+function NodeIcon({ type, size = 24, color }) {
+  const cfg = NODE_CONFIG[type] || NODE_CONFIG.caja;
+  const c = color || cfg.color;
+  return <span dangerouslySetInnerHTML={{ __html: NODE_ICONS[type]?.(c, size) || '' }} style={{ display: 'flex', alignItems: 'center' }} />;
+}
 
 const CABLE_TYPES = [
   'Fibra monomodo 4H',
@@ -228,25 +263,27 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
           <div>
             <label style={{ marginBottom: 8 }}>Tipo de punto *</label>
             <div style={{ display: 'flex', gap: 8 }}>
-              {Object.entries(NODE_CONFIG).map(([key, c]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, type: key }))}
-                  style={{
-                    flex: 1, minHeight: 52, borderRadius: 10, cursor: 'pointer',
-                    fontSize: 14, fontWeight: 700,
-                    border: `2px solid ${form.type === key ? c.color : 'var(--border)'}`,
-                    background: form.type === key ? c.bg : 'var(--bg)',
-                    color: form.type === key ? c.color : 'var(--text-muted)',
-                    transition: 'all .15s', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', gap: 2,
-                  }}
-                >
-                  <span style={{ fontSize: 20 }}>{c.emoji}</span>
-                  <span style={{ fontSize: 12 }}>{c.label}</span>
-                </button>
-              ))}
+              {Object.entries(NODE_CONFIG).map(([key, c]) => {
+                const active = form.type === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, type: key }))}
+                    style={{
+                      flex: 1, minHeight: 64, borderRadius: 10, cursor: 'pointer',
+                      border: `2px solid ${active ? c.color : 'var(--border)'}`,
+                      background: active ? c.bg : 'var(--bg)',
+                      color: active ? c.color : 'var(--text-muted)',
+                      transition: 'all .15s', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 4, padding: '8px 4px',
+                    }}
+                  >
+                    <NodeIcon type={key} size={22} color={active ? c.color : '#94a3b8'} />
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>{c.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -582,7 +619,7 @@ export default function MapPage() {
           const popupHtml = `
             <div style="font-family:-apple-system,sans-serif;min-width:200px;">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-                <span style="font-size:18px;">${cfg.emoji}</span>
+                <div style="width:30px;height:30px;border-radius:50%;background:${cfg.color};display:flex;align-items:center;justify-content:center;flex-shrink:0;">${NODE_ICONS[node.type]?.('#fff', 16) || ''}</div>
                 <div>
                   <div style="font-weight:700;font-size:13px;color:${cfg.color};">${node.name}</div>
                   <div style="font-size:11px;color:#64748b;">${cfg.label}</div>
@@ -597,9 +634,9 @@ export default function MapPage() {
             </div>`;
 
           const icon = L.divIcon({
-            html: `<div style="width:28px;height:28px;border-radius:50%;background:${cfg.color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.35);">${cfg.emoji}</div>`,
-            iconSize:   [28, 28],
-            iconAnchor: [14, 14],
+            html: `<div style="width:32px;height:32px;border-radius:50%;background:${cfg.color};border:3px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);">${NODE_ICONS[node.type]?.('#fff', 18) || ''}</div>`,
+            iconSize:   [32, 32],
+            iconAnchor: [16, 16],
             className:  '',
           });
 
@@ -698,7 +735,7 @@ export default function MapPage() {
               ))}
               {showNodes && Object.entries(NODE_CONFIG).map(([key, c]) => (
                 <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-                  <span style={{ fontSize: 11 }}>{c.emoji}</span>
+                  <NodeIcon type={key} size={14} color={c.color} />
                   <span style={{ color: c.color, fontWeight: 600 }}>{c.label}</span>
                 </span>
               ))}
