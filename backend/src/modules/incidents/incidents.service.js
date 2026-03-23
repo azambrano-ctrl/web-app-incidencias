@@ -506,19 +506,7 @@ async function regeocode() {
 async function searchClients(q, userId, userRole) {
   const db = getDb();
 
-  // Para técnicos: solo clientes con incidencias ACTIVAS asignadas a ellos (no cerradas/canceladas)
-  const ACTIVE = `status NOT IN ('resolved','closed','cancelled')`;
-  const techFilter = userRole === 'technician'
-    ? `AND EXISTS (
-         SELECT 1 FROM incidents i
-         WHERE i.client_identificacion = c.identificacion
-           AND i.assigned_to = $2
-           AND i.${ACTIVE}
-       )`
-    : '';
-
-  const params = q ? [`%${q}%`] : ['%%'];
-  if (userRole === 'technician') params.push(userId);
+  const params = [q ? `%${q}%` : '%%'];
 
   const { rows } = await db.query(`
     SELECT
@@ -529,11 +517,9 @@ async function searchClients(q, userId, userRole) {
       -- Incidencia más reciente del cliente
       (SELECT i.id FROM incidents i
        WHERE i.client_identificacion = c.identificacion
-       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
        ORDER BY i.created_at DESC LIMIT 1) as incident_id,
       (SELECT i.ticket_number FROM incidents i
        WHERE i.client_identificacion = c.identificacion
-       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
        ORDER BY i.created_at DESC LIMIT 1) as ticket_number,
       (SELECT i.latitude FROM incidents i
        WHERE i.client_identificacion = c.identificacion
@@ -545,12 +531,10 @@ async function searchClients(q, userId, userRole) {
       (SELECT ip.id FROM incident_photos ip
        JOIN incidents i ON i.id = ip.incident_id
        WHERE i.client_identificacion = c.identificacion
-       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
        ORDER BY ip.created_at DESC LIMIT 1) as photo_id,
       (SELECT ip.incident_id FROM incident_photos ip
        JOIN incidents i ON i.id = ip.incident_id
        WHERE i.client_identificacion = c.identificacion
-       ${userRole === 'technician' ? 'AND i.assigned_to = $2' : ''}
        ORDER BY ip.created_at DESC LIMIT 1) as photo_incident_id
     FROM clients c
     WHERE (
@@ -559,7 +543,6 @@ async function searchClients(q, userId, userRole) {
       OR c.celular1 ILIKE $1
       OR c.identificacion ILIKE $1
     )
-    ${techFilter}
     ORDER BY c.apellido1, c.nombre1
     LIMIT 50
   `, params);
