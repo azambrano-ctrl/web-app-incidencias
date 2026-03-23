@@ -27,8 +27,16 @@ function initSocket(httpServer) {
   });
 
   // Middleware de autenticación Socket.io
+  // Lee el token desde la cookie httpOnly (mismo mecanismo que el REST API)
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
+    let token = socket.handshake.auth?.token; // compatibilidad hacia atrás
+
+    if (!token) {
+      const cookies = socket.handshake.headers.cookie || '';
+      const match = cookies.match(/(?:^|;\s*)auth_token=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
+
     if (!token) return next(new Error('Token requerido'));
 
     try {

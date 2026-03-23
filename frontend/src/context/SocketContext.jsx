@@ -10,8 +10,7 @@ export function SocketProvider({ children }) {
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!user || !token) return;
+    if (!user) return;
 
     // Usar VITE_SOCKET_URL si está definida, sino derivar desde VITE_API_URL
     const socketUrl = import.meta.env.VITE_SOCKET_URL ||
@@ -19,9 +18,10 @@ export function SocketProvider({ children }) {
 
     console.log('[Socket] Conectando a:', socketUrl);
 
+    // withCredentials=true envía la cookie httpOnly auth_token automáticamente
     const socket = io(socketUrl, {
-      auth: { token },
-      transports: ['polling', 'websocket'],
+      withCredentials: true,
+      transports: ['polling', 'websocket'], // polling primero para que la cookie se envíe
       reconnectionAttempts: 10,
       reconnectionDelay: 3000,
       timeout: 20000,
