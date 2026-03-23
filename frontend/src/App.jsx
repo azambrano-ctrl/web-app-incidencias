@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+import OfflineBanner from './components/layout/OfflineBanner';
 
 const LoginPage          = lazy(() => import('./pages/LoginPage'));
 const DashboardPage      = lazy(() => import('./pages/DashboardPage'));
@@ -43,6 +44,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </BrowserRouter>
+          <OfflineBanner />
           <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
         </SocketProvider>
       </AuthProvider>
