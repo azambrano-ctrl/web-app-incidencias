@@ -117,29 +117,15 @@ function startReminderJob() {
         console.log(`[Cron] SLA recordatorio: ${inc.ticket_number} → ${inc.technician_name}`);
       }
 
-      /* ── Escalamiento automático (solo en horario hábil) ── */
-      if (!isBusinessHoursNow()) {
-        // Fuera de horario laboral no se escala (domingos, noches, etc.)
-        console.log('[Cron] Fuera de horario hábil — escalamiento omitido');
-      } else {
-      const { rows: settingRows } = await db.query(
-        `SELECT value FROM settings WHERE key='escalation_hours'`
-      );
-      const escalationHours = parseFloat(settingRows[0]?.value || '4');
-
-      // Candidatos: sin escalar, estado activo y con suficiente antigüedad de reloj
-      // (filtramos con margen amplio, luego verificamos horas hábiles en JS)
-      const { rows: candidates } = await db.query(`
+      /* ── Escalamiento automático: cuando el SLA vence (due_at < NOW()) ── */
+      // Se escala cuando expira el plazo, no antes. El SLA ya incorpora horario hábil.
+      const { rows: toEscalate } = await db.query(`
         SELECT i.* FROM incidents i
-        WHERE i.status IN ('open','assigned')
+        WHERE i.status IN ('open','assigned','in_progress')
           AND i.escalated = FALSE
-          AND i.created_at < NOW() - INTERVAL '1 hour'
+          AND i.due_at IS NOT NULL
+          AND i.due_at < NOW()
       `);
-
-      // Solo escalar los que superen N horas hábiles desde su creación
-      const toEscalate = candidates.filter(
-        inc => businessHoursElapsed(inc.created_at) >= escalationHours
-      );
 
       if (toEscalate.length > 0) {
         const { rows: supervisors } = await db.query(
@@ -150,20 +136,23 @@ function startReminderJob() {
             `UPDATE incidents SET escalated=TRUE, escalated_at=NOW(), updated_at=NOW() WHERE id=$1`,
             [inc.id]
           );
-          const escMsg = `🔺 ESCALADA: ${inc.ticket_number} "${inc.title}" lleva más de ${escalationHours}h sin ser atendida`;
+          const dueStr = new Date(inc.due_at).toLocaleString('es-EC', {
+            timeZone: 'America/Guayaquil', day: '2-digit', month: '2-digit',
+            hour: '2-digit', minute: '2-digit',
+          });
+          const escMsg = `🔺 SLA VENCIDO: ${inc.ticket_number} "${inc.title}" — venció el ${dueStr}`;
           for (const sup of supervisors) {
             const notif = await createNotification(sup.id, 'escalation', escMsg, inc.id);
             if (_io) {
               _io.to(`user:${sup.id}`).emit('notification:new', notif);
               _io.to(`user:${sup.id}`).emit('incident:escalated', { incident: inc, message: escMsg });
             }
-            sendPush(sup.id, { title: 'Incidencia escalada', body: escMsg, url: `/incidencias/${inc.id}` })
+            sendPush(sup.id, { title: 'SLA vencido — incidencia escalada', body: escMsg, url: `/incidencias/${inc.id}` })
               .catch(e => console.error('[Cron] Push escalation error:', e.message));
           }
-          console.log(`[Cron] Escalada: ${inc.ticket_number}`);
+          console.log(`[Cron] Escalada por SLA vencido: ${inc.ticket_number}`);
         }
       }
-      } // fin bloque isBusinessHoursNow
 
       /* ── Notificaciones de mantenimientos próximos (1h antes) ── */
       const { rows: upcoming } = await db.query(`
