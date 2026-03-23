@@ -137,6 +137,7 @@ const EMPTY_FORM = {
   notes: '',
   latitude: '',
   longitude: '',
+  splices: [], // [{ id, fromN, toN }]
 };
 
 function getSLALabel(dueAt, status) {
@@ -170,6 +171,7 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
       notes:       initial.notes       || '',
       latitude:    initial.latitude    || '',
       longitude:   initial.longitude   || '',
+      splices:     initial.splices     || [],
     } : EMPTY_FORM);
   }, [open, initial]);
 
@@ -433,6 +435,127 @@ function NodeModal({ open, onClose, initial, onSaved, isAdmin }) {
             );
           })()}
 
+          {/* ── Registro de fusiones (solo manga) ── */}
+          {form.type === 'manga' && (() => {
+            const total = parseInt(form.total_hilos) || 0;
+            // Genera opciones de fibra: { n, nombre, hex, text, tube }
+            const fiberOptions = total > 0
+              ? Array.from({ length: total }, (_, i) => {
+                  const n = i + 1;
+                  const color = TIA598[(n - 1) % 12];
+                  const tubeIdx = Math.floor((n - 1) / 12);
+                  const tubeColor = TIA598[tubeIdx % 12];
+                  return { n, ...color, tube: tubeIdx + 1, tubeColor };
+                })
+              : [];
+
+            function addSplice() {
+              setForm(f => ({ ...f, splices: [...f.splices, { id: Date.now(), fromN: '', toN: '' }] }));
+            }
+            function removeSplice(id) {
+              setForm(f => ({ ...f, splices: f.splices.filter(s => s.id !== id) }));
+            }
+            function setSplice(id, key, val) {
+              setForm(f => ({ ...f, splices: f.splices.map(s => s.id === id ? { ...s, [key]: val } : s) }));
+            }
+
+            const FiberChip = ({ n }) => {
+              if (!n) return null;
+              const f = fiberOptions.find(o => o.n === parseInt(n));
+              if (!f) return null;
+              return (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  background: f.hex, color: f.text || '#fff',
+                  borderRadius: 6, padding: '2px 7px', fontSize: 11, fontWeight: 700,
+                  border: '2px solid rgba(255,255,255,.4)',
+                }}>
+                  {f.n} {f.nombre}
+                </span>
+              );
+            };
+
+            return (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                    🔗 Registro de fusiones {form.splices.length > 0 ? `(${form.splices.length})` : ''}
+                  </span>
+                  <button
+                    type="button" onClick={addSplice}
+                    style={{ fontSize: 12, fontWeight: 700, background: '#ea580c', color: '#fff', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+                  >
+                    + Agregar fusión
+                  </button>
+                </div>
+
+                {total === 0 && (
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Ingresa el total de hilos arriba para poder registrar fusiones.</p>
+                )}
+
+                {form.splices.length === 0 && total > 0 && (
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Toca "+ Agregar fusión" para registrar cada empalme.</p>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {form.splices.map((splice, idx) => {
+                    const fromFiber = fiberOptions.find(o => o.n === parseInt(splice.fromN));
+                    const toFiber   = fiberOptions.find(o => o.n === parseInt(splice.toN));
+                    return (
+                      <div key={splice.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Fusión {idx + 1}</span>
+                          <button type="button" onClick={() => removeSplice(splice.id)}
+                            style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14 }}>✕</button>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {/* Hilo origen */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>HILO A</div>
+                            <select
+                              value={splice.fromN}
+                              onChange={e => setSplice(splice.id, 'fromN', e.target.value)}
+                              style={{ width: '100%', padding: '7px 6px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, background: fromFiber ? fromFiber.hex : '#fff', color: fromFiber ? (fromFiber.text || '#fff') : '#374151', fontWeight: 700 }}
+                            >
+                              <option value="">— Seleccionar —</option>
+                              {fiberOptions.map(f => (
+                                <option key={f.n} value={f.n} style={{ background: f.hex, color: f.text || '#fff' }}>
+                                  Hilo {f.n} — {f.nombre}{total > 12 ? ` (T${f.tube})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            {fromFiber && <FiberChip n={splice.fromN} />}
+                          </div>
+
+                          {/* Flecha */}
+                          <div style={{ fontSize: 18, color: '#94a3b8', flexShrink: 0, marginTop: 14 }}>⇄</div>
+
+                          {/* Hilo destino */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>HILO B</div>
+                            <select
+                              value={splice.toN}
+                              onChange={e => setSplice(splice.id, 'toN', e.target.value)}
+                              style={{ width: '100%', padding: '7px 6px', borderRadius: 7, border: '1px solid #d1d5db', fontSize: 13, background: toFiber ? toFiber.hex : '#fff', color: toFiber ? (toFiber.text || '#fff') : '#374151', fontWeight: 700 }}
+                            >
+                              <option value="">— Seleccionar —</option>
+                              {fiberOptions.map(f => (
+                                <option key={f.n} value={f.n} style={{ background: f.hex, color: f.text || '#fff' }}>
+                                  Hilo {f.n} — {f.nombre}{total > 12 ? ` (T${f.tube})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                            {toFiber && <FiberChip n={splice.toN} />}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Descripción */}
           <label>
             Descripción / trabajo realizado
@@ -630,6 +753,23 @@ export default function MapPage() {
               ${hilosHtml}
               ${node.description ? `<div style="font-size:12px;color:#374151;margin-top:6px;border-top:1px solid #f1f5f9;padding-top:6px;">${node.description}</div>` : ''}
               ${node.notes ? `<div style="font-size:11px;color:#64748b;margin-top:4px;font-style:italic;">${node.notes}</div>` : ''}
+              ${(() => {
+                const sp = Array.isArray(node.splices) ? node.splices.filter(s => s.fromN && s.toN) : [];
+                if (!sp.length) return '';
+                const chips = sp.map(s => {
+                  const a = TIA598[(parseInt(s.fromN)-1)%12];
+                  const b = TIA598[(parseInt(s.toN)-1)%12];
+                  return `<span style="display:inline-flex;align-items:center;gap:3px;margin:2px;">
+                    <span style="background:${a.hex};color:${a.text||'#fff'};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;">${s.fromN} ${a.nombre}</span>
+                    <span style="color:#94a3b8;font-size:10px;">⇄</span>
+                    <span style="background:${b.hex};color:${b.text||'#fff'};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700;">${s.toN} ${b.nombre}</span>
+                  </span>`;
+                }).join('');
+                return `<div style="margin-top:8px;border-top:1px solid #f1f5f9;padding-top:6px;">
+                  <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px;">🔗 Fusiones (${sp.length})</div>
+                  <div style="display:flex;flex-wrap:wrap;">${chips}</div>
+                </div>`;
+              })()}
               <div style="font-size:10px;color:#94a3b8;margin-top:6px;">Por: ${node.created_by_name || '—'}</div>
               <div style="display:flex;gap:6px;margin-top:8px;">${editBtn}${delBtn}</div>
             </div>`;

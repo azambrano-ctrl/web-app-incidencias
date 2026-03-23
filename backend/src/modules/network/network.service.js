@@ -26,21 +26,21 @@ async function getNode(id) {
 
 async function createNode(data, userId) {
   const db = getDb();
-  const { type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes } = data;
+  const { type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes, splices } = data;
   const { rows } = await db.query(`
     INSERT INTO network_nodes
-      (type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes, created_by, updated_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)
+      (type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes, splices, created_by, updated_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
     RETURNING *
   `, [type, name, description || null, latitude, longitude,
       cable_type || null, total_hilos || 0, hilos_used || 0,
-      notes || null, userId]);
+      notes || null, JSON.stringify(splices || []), userId]);
   return rows[0];
 }
 
 async function updateNode(id, data, userId) {
   const db = getDb();
-  const { type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes } = data;
+  const { type, name, description, latitude, longitude, cable_type, total_hilos, hilos_used, notes, splices } = data;
   const { rows } = await db.query(`
     UPDATE network_nodes SET
       type        = COALESCE($1, type),
@@ -52,13 +52,14 @@ async function updateNode(id, data, userId) {
       total_hilos = COALESCE($7, total_hilos),
       hilos_used  = COALESCE($8, hilos_used),
       notes       = $9,
-      updated_by  = $10,
+      splices     = $10,
+      updated_by  = $11,
       updated_at  = NOW()
-    WHERE id = $11
+    WHERE id = $12
     RETURNING *
   `, [type, name, description ?? null, latitude, longitude,
       cable_type ?? null, total_hilos, hilos_used,
-      notes ?? null, userId, id]);
+      notes ?? null, JSON.stringify(splices || []), userId, id]);
   if (!rows[0]) throw Object.assign(new Error('Nodo no encontrado'), { status: 404 });
   return rows[0];
 }
