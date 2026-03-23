@@ -16,6 +16,29 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
+    // Sin conexión: restaurar sesión guardada localmente
+    if (!navigator.onLine) {
+      try {
+        const cached = localStorage.getItem('offline_user_info');
+        if (cached) {
+          const userInfo = JSON.parse(cached);
+          loginUser(userInfo);
+          toast('📴 Modo offline — sesión local restaurada', {
+            icon: '✅',
+            style: { background: '#1e293b', color: '#f8fafc' },
+          });
+          const next = searchParams.get('next');
+          navigate(next && next.startsWith('/') ? next : '/');
+        } else {
+          toast.error('Sin conexión y sin sesión previa. Conéctate para ingresar por primera vez.');
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       const { user } = await login(email, password);
       loginUser(user);

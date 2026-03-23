@@ -17,12 +17,15 @@ export function AuthProvider({ children }) {
 
   const loginUser = useCallback((userInfo) => {
     sessionStorage.setItem('user_info', JSON.stringify(userInfo));
+    // Backup en localStorage para permitir acceso offline
+    localStorage.setItem('offline_user_info', JSON.stringify(userInfo));
     setUser(userInfo);
   }, []);
 
   const logout = useCallback(async () => {
     try { await api.post('/auth/logout'); } catch { /* ignorar */ }
     sessionStorage.removeItem('user_info');
+    localStorage.removeItem('offline_user_info');
     setUser(null);
   }, []);
 
