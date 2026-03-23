@@ -14,7 +14,8 @@ const clientRoutes = require('./modules/clients/clients.routes');
 const settingsRoutes = require('./modules/settings/settings.routes');
 const checklistRoutes = require('./modules/checklists/checklists.routes');
 const maintenanceRoutes = require('./modules/maintenances/maintenances.routes');
-const oncallRoutes = require('./modules/oncall/oncall.routes');
+const oncallRoutes   = require('./modules/oncall/oncall.routes');
+const networkRoutes  = require('./modules/network/network.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -92,7 +93,8 @@ app.use('/api/v1/clients', clientRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/checklists', checklistRoutes);
 app.use('/api/v1/maintenances', maintenanceRoutes);
-app.use('/api/v1/oncall', oncallRoutes);
+app.use('/api/v1/oncall',   oncallRoutes);
+app.use('/api/v1/network',  networkRoutes);
 
 app.get('/api/v1/health', (req, res) => res.json({ status: 'ok' }));
 
