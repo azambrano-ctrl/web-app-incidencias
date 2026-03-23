@@ -83,21 +83,24 @@ export default function ConfigPage() {
   });
 
   // Cargar ajustes de notificaciones
-  useQuery({
+  const { data: settingsData } = useQuery({
     queryKey: ['settings'],
     queryFn: getSettings,
     enabled: user?.role === 'admin',
-    onSuccess: (s) => {
-      setEmailCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('email_'))) }));
-      setWaCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('whatsapp_'))) }));
-      setPushCfg(prev => ({ ...prev, push_enabled: s.push_enabled || '0' }));
-      setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
-      if (s.escalation_hours) setEscalationHours(s.escalation_hours);
-      if (s.default_city) setDefaultCity(s.default_city);
-      if (s.map_bbox) setMapBbox(s.map_bbox);
-      if (s.google_maps_key) setGoogleMapsKey(s.google_maps_key);
-    },
   });
+
+  useEffect(() => {
+    if (!settingsData) return;
+    const s = settingsData;
+    setEmailCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('email_'))) }));
+    setWaCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('whatsapp_'))) }));
+    setPushCfg(prev => ({ ...prev, push_enabled: s.push_enabled || '0' }));
+    setExtCfg(prev => ({ ...prev, ...Object.fromEntries(Object.entries(s).filter(([k]) => k.startsWith('ext_api_'))) }));
+    if (s.escalation_hours) setEscalationHours(s.escalation_hours);
+    if (s.default_city) setDefaultCity(s.default_city);
+    if (s.map_bbox) setMapBbox(s.map_bbox);
+    if (s.google_maps_key) setGoogleMapsKey(s.google_maps_key);
+  }, [settingsData]);
 
   // Verificar si push ya está suscrito
   useEffect(() => {
