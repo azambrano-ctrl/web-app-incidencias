@@ -18,6 +18,7 @@ const MapPage            = lazy(() => import('./pages/MapPage'));
 const MaintenancePage    = lazy(() => import('./pages/MaintenancePage'));
 const OnCallPage         = lazy(() => import('./pages/OnCallPage'));
 const ClientDirectoryPage = lazy(() => import('./pages/ClientDirectoryPage'));
+const RoutersPage        = lazy(() => import('./pages/RoutersPage'));
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30000 } } });
 
@@ -40,6 +41,7 @@ export default function App() {
                 <Route path="/mantenimientos" element={<ProtectedRoute roles={['admin', 'supervisor']}><MaintenancePage /></ProtectedRoute>} />
                 <Route path="/guardia" element={<ProtectedRoute roles={['admin', 'supervisor']}><OnCallPage /></ProtectedRoute>} />
                 <Route path="/clientes" element={<ProtectedRoute roles={['admin', 'supervisor', 'technician']}><ClientDirectoryPage /></ProtectedRoute>} />
+                <Route path="/routers" element={<ProtectedRoute roles={['admin', 'supervisor']}><RoutersPage /></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>

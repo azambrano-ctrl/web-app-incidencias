@@ -16,6 +16,7 @@ const checklistRoutes = require('./modules/checklists/checklists.routes');
 const maintenanceRoutes = require('./modules/maintenances/maintenances.routes');
 const oncallRoutes   = require('./modules/oncall/oncall.routes');
 const networkRoutes  = require('./modules/network/network.routes');
+const routerRoutes   = require('./modules/routers/routers.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -95,6 +96,7 @@ app.use('/api/v1/checklists', checklistRoutes);
 app.use('/api/v1/maintenances', maintenanceRoutes);
 app.use('/api/v1/oncall',   oncallRoutes);
 app.use('/api/v1/network',  networkRoutes);
+app.use('/api/v1/routers', routerRoutes);
 
 app.get('/api/v1/health', (req, res) => res.json({ status: 'ok' }));
 
