@@ -21,6 +21,20 @@ async function runMigrations010() {
       updated_at       TIMESTAMPTZ DEFAULT NOW()
     );
   `);
+  // Insertar OLTs de ejemplo si la tabla está vacía
+  const { rows } = await db.query('SELECT COUNT(*) as c FROM olts');
+  if (parseInt(rows[0].c) === 0) {
+    await db.query(`
+      INSERT INTO olts (description, ip, username, password, ssh_port, brand, connection_type, status) VALUES
+        ('OLT-CENTRAL ZTE C300',   '192.168.1.10', 'admin', 'admin123', 22, 'zte',      'ssh', 'active'),
+        ('OLT-NORTE Huawei MA5800','192.168.1.11', 'root',  'huawei',   22, 'huawei',   'ssh', 'active'),
+        ('OLT-SUR FiberHome',      '192.168.1.12', 'admin', 'fiberhome',22, 'fiberhome','ssh', 'inactive'),
+        ('OLT-ESTE VSOL V1600D',   '192.168.1.13', 'admin', 'vsol1234', 22, 'vsol',     'ssh', 'active'),
+        ('OLT-OESTE Nokia 7360',   '192.168.1.14', 'isadmin','nokia123',22, 'nokia',    'ssh', 'inactive')
+    `);
+    console.log('[Migration 010] OLTs de ejemplo insertadas');
+  }
+
   console.log('[Migration 010] olts OK');
 }
 
