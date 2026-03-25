@@ -96,7 +96,7 @@ async function listIncidents(filters, userId, userRole) {
       i.client_name, i.client_address, i.client_phone, i.client_phone2,
       i.assigned_to, i.created_by, i.parent_id,
       i.latitude, i.longitude, i.due_at, i.resolved_at, i.solution,
-      i.created_at, i.updated_at,
+      i.created_at, i.updated_at, i.external_id,
       u1.name as assigned_name, u1.email as assigned_email,
       u2.name as created_name,
       (SELECT COUNT(*) FROM incidents ch WHERE ch.parent_id = i.id) as children_count

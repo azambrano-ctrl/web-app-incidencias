@@ -354,6 +354,7 @@ export default function IncidentsPage() {
                       <tr key={inc.id} onClick={() => navigate(`/incidencias/${inc.id}`)} className="table-row-click">
                         <td>
                           <code className="ticket">{inc.ticket_number}</code>
+                          {inc.external_id && <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>LSF #{inc.external_id}</span>}
                           {inc.escalated && <span className="escalated-tag" title="Escalada">🔺</span>}
                           {parseInt(inc.children_count) > 0 && (
                             <span className="parent-tag" title={`${inc.children_count} sub-incidencias`}>🔗 {inc.children_count}</span>
@@ -431,6 +432,7 @@ export default function IncidentsPage() {
                       <PriorityBadge priority={inc.priority} />
                       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{TYPE_LABELS[inc.type]}</span>
                       <code className="ticket" style={{ fontSize: 11 }}>{inc.ticket_number}</code>
+                      {inc.external_id && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>LSF #{inc.external_id}</span>}
                       {parseInt(inc.children_count) > 0 && (
                         <span style={{ fontSize: 11, color: '#6366f1' }}>🔗 {inc.children_count} sub-inc.</span>
                       )}

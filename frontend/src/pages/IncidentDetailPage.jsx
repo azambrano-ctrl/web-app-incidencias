@@ -263,7 +263,7 @@ export default function IncidentDetailPage() {
     <div className="app-layout">
       <Sidebar />
       <main className="main-content">
-        <Topbar title={inc.ticket_number} />
+        <Topbar title={inc.ticket_number + (inc.external_id ? `  ·  LSF #${inc.external_id}` : '')} />
         <div className="page-body">
           <div className="detail-back" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <button className="btn btn-sm btn-secondary" onClick={() => navigate('/incidencias')}>← Volver</button>
