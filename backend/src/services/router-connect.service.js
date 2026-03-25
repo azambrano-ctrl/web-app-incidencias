@@ -119,22 +119,22 @@ async function testConnection(router) {
 
 async function getClients(router) {
   try {
-    const rows = await sendCommand(
+    // Intentar PPP activos primero (más común en ISPs)
+    const ppp = await sendCommand(
       router.ip, router.api_port, router.username, router.password,
-      [['/ip/hotspot/active/print'], ['/cancel', '=tag=1']]
+      [['/ppp/active/print']]
     );
-    // Fallback: si hotspot vacío, intentar PPP activos
-    if (!rows.length) {
-      const ppp = await sendCommand(
-        router.ip, router.api_port, router.username, router.password,
-        [['/ppp/active/print']]
-      );
-      return ppp;
-    }
-    return rows;
+    if (ppp.length) return ppp;
+
+    // Fallback: hotspot
+    const hotspot = await sendCommand(
+      router.ip, router.api_port, router.username, router.password,
+      [['/ip/hotspot/active/print']]
+    );
+    return hotspot;
   } catch (e) {
     console.error('[RouterSvc] getClients error:', e.message);
-    return [];
+    throw e;
   }
 }
 

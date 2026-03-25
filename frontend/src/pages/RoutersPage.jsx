@@ -16,11 +16,12 @@ export default function RoutersPage() {
   const [testing, setTesting] = useState(null);
 
   const { data: routers = [], isLoading } = useQuery({ queryKey: ['routers'], queryFn: getRouters });
-  const { data: clients = [], isFetching: loadingClients } = useQuery({
+  const { data: clients = [], isFetching: loadingClients, isError: clientsError } = useQuery({
     queryKey: ['router-clients', selectedRouter?.id],
     queryFn: () => getRouterClients(selectedRouter.id),
     enabled: !!selectedRouter,
     refetchInterval: 30000,
+    retry: false,
   });
 
   const saveMut = useMutation({
@@ -146,8 +147,11 @@ export default function RoutersPage() {
                 </button>
               </div>
               {loadingClients && <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Consultando router...</p>}
-              {!loadingClients && clients.length === 0 && (
-                <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No se encontraron clientes activos o no se pudo conectar al router.</p>
+              {!loadingClients && clientsError && (
+                <p style={{ color: '#dc2626', fontSize: 13 }}>No se pudo conectar al router. Verifica IP, puerto y credenciales.</p>
+              )}
+              {!loadingClients && !clientsError && clients.length === 0 && (
+                <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin clientes activos o el router no respondió.</p>
               )}
               {clients.length > 0 && (
                 <table className="data-table">
@@ -184,41 +188,46 @@ export default function RoutersPage() {
           {/* Modal formulario */}
           {showForm && (
             <div className="modal-overlay" onClick={() => setShowForm(false)}>
-              <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
-                <h3 style={{ marginTop: 0 }}>{editing ? 'Editar router' : 'Nuevo router'}</h3>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <label>Descripción *
-                    <input value={form.description} onChange={e => set('description', e.target.value.toUpperCase())} required />
-                  </label>
-                  <label>IP *
-                    <input value={form.ip} onChange={e => set('ip', e.target.value)} required placeholder="45.71.3.172" />
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <label>Usuario *
-                      <input value={form.username} onChange={e => set('username', e.target.value)} required />
+              <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>{editing ? 'Editar router' : 'Nuevo router'}</h3>
+                  <button className="modal-close" onClick={() => setShowForm(false)}>✕</button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                  <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <label>Descripción *
+                      <input value={form.description} onChange={e => set('description', e.target.value.toUpperCase())} required placeholder="ROUTER 105.100" />
                     </label>
-                    <label>Contraseña {editing ? '(dejar vacío = no cambiar)' : '*'}
-                      <input type="password" value={form.password} onChange={e => set('password', e.target.value)} required={!editing} />
+                    <label>IP *
+                      <input value={form.ip} onChange={e => set('ip', e.target.value)} required placeholder="45.71.3.172" />
+                    </label>
+                    <div className="form-row two-cols" style={{ margin: 0 }}>
+                      <label>Usuario *
+                        <input value={form.username} onChange={e => set('username', e.target.value)} required />
+                      </label>
+                      <label>Contraseña {editing ? <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(vacío = no cambiar)</span> : '*'}
+                        <input type="password" value={form.password} onChange={e => set('password', e.target.value)} required={!editing} />
+                      </label>
+                    </div>
+                    <label>Puerto API *
+                      <input type="number" value={form.api_port} onChange={e => set('api_port', e.target.value)} required min={1} max={65535} />
+                    </label>
+                    <div className="form-row two-cols" style={{ margin: 0 }}>
+                      <label>Etiqueta de corte
+                        <input value={form.cut_label} onChange={e => set('cut_label', e.target.value.toUpperCase())} />
+                      </label>
+                      <label>Etiqueta de activación
+                        <input value={form.active_label} onChange={e => set('active_label', e.target.value.toUpperCase())} />
+                      </label>
+                    </div>
+                    <label>Status
+                      <select value={form.status} onChange={e => set('status', e.target.value)}>
+                        <option value="active">Activo</option>
+                        <option value="inactive">Inactivo</option>
+                      </select>
                     </label>
                   </div>
-                  <label>Puerto API *
-                    <input type="number" value={form.api_port} onChange={e => set('api_port', e.target.value)} required min={1} max={65535} />
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <label>Etiqueta de corte
-                      <input value={form.cut_label} onChange={e => set('cut_label', e.target.value.toUpperCase())} />
-                    </label>
-                    <label>Etiqueta de activación
-                      <input value={form.active_label} onChange={e => set('active_label', e.target.value.toUpperCase())} />
-                    </label>
-                  </div>
-                  <label>Status
-                    <select value={form.status} onChange={e => set('status', e.target.value)}>
-                      <option value="active">Activo</option>
-                      <option value="inactive">Inactivo</option>
-                    </select>
-                  </label>
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+                  <div className="form-actions">
                     <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
                     <button type="submit" className="btn btn-primary" disabled={saveMut.isPending}>
                       {saveMut.isPending ? 'Guardando...' : 'Guardar'}
