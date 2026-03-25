@@ -170,4 +170,22 @@ async function activateClient(router, address) {
   }
 }
 
-module.exports = { testConnection, getClients, cutClient, activateClient };
+async function getMetrics(router) {
+  try {
+    const rows = await sendCommand(
+      router.ip, router.api_port, router.username, router.password,
+      [['/queue/simple/monitor', '=once=']]
+    );
+    // Indexar por nombre de cola para lookup rápido
+    const map = {};
+    for (const r of rows) {
+      if (r.name) map[r.name] = { rxRate: parseInt(r['rx-rate'] || 0), txRate: parseInt(r['tx-rate'] || 0) };
+    }
+    return map;
+  } catch (e) {
+    console.warn('[RouterSvc] getMetrics error:', e.message);
+    return {};
+  }
+}
+
+module.exports = { testConnection, getClients, getMetrics, cutClient, activateClient };

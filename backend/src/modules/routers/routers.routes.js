@@ -59,6 +59,15 @@ router.post('/:id/test', authorize('admin', 'supervisor'), async (req, res, next
   } catch (e) { next(e); }
 });
 
+// GET /api/v1/routers/:id/metrics — Tasas en tiempo real
+router.get('/:id/metrics', async (req, res, next) => {
+  try {
+    const r = await svc.getRouter(req.params.id);
+    const result = await routerSvc.getMetrics(r);
+    res.json(result);
+  } catch (e) { next(e); }
+});
+
 // GET /api/v1/routers/:id/clients — Listar clientes/ONTs del router
 router.get('/:id/clients', async (req, res, next) => {
   try {

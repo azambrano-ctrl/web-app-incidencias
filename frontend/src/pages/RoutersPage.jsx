@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRouters, createRouter, updateRouter, deleteRouter, testConnection, getRouterClients, cutClient, activateClient } from '../api/routers.api';
+import { getRouters, createRouter, updateRouter, deleteRouter, testConnection, getRouterClients, getRouterMetrics, cutClient, activateClient } from '../api/routers.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import { toast } from 'react-hot-toast';
@@ -18,6 +18,12 @@ function fmtBw(val = '') {
   const [up, dn] = val.split('/');
   const mbps = n => n ? `${(parseInt(n) / 1e6).toFixed(0)} Mbps` : '—';
   return `↑${mbps(up)} ↓${mbps(dn)}`;
+}
+
+function fmtRate(bps = 0) {
+  if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
+  if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`;
+  return `${bps} bps`;
 }
 
 function fmtBytes(val = '') {
@@ -41,6 +47,14 @@ export default function RoutersPage() {
     queryFn: () => getRouterClients(selectedRouter.id),
     enabled: !!selectedRouter,
     refetchInterval: 30000,
+    retry: false,
+  });
+
+  const { data: metrics = {} } = useQuery({
+    queryKey: ['router-metrics', selectedRouter?.id],
+    queryFn: () => getRouterMetrics(selectedRouter.id),
+    enabled: !!selectedRouter,
+    refetchInterval: 4000,
     retry: false,
   });
 
@@ -202,8 +216,9 @@ export default function RoutersPage() {
                         <th style={{ padding: '10px 14px' }}>Cédula</th>
                         <th style={{ padding: '10px 14px' }}>Contrato</th>
                         <th style={{ padding: '10px 14px' }}>IP</th>
-                        <th style={{ padding: '10px 14px' }}>Ancho de banda</th>
-                        <th style={{ padding: '10px 14px' }}>Tráfico</th>
+                        <th style={{ padding: '10px 14px' }}>Límite</th>
+                        <th style={{ padding: '10px 14px' }}>Velocidad actual</th>
+                        <th style={{ padding: '10px 14px' }}>Tráfico total</th>
                         <th style={{ padding: '10px 14px' }}>Acciones</th>
                       </tr>
                     </thead>
@@ -221,6 +236,15 @@ export default function RoutersPage() {
                             <td style={{ fontSize: 12, padding: '10px 14px' }}>{cntid || '—'}</td>
                             <td style={{ fontSize: 12, fontFamily: 'monospace', padding: '10px 14px' }}>{ip}</td>
                             <td style={{ fontSize: 11, whiteSpace: 'nowrap', padding: '10px 14px' }}>{bw}</td>
+                            <td style={{ fontSize: 11, whiteSpace: 'nowrap', padding: '10px 14px' }}>
+                              {metrics[c.name] ? (
+                                <span>
+                                  <span style={{ color: '#2563eb' }}>↑{fmtRate(metrics[c.name].rxRate)}</span>
+                                  {' '}
+                                  <span style={{ color: '#16a34a' }}>↓{fmtRate(metrics[c.name].txRate)}</span>
+                                </span>
+                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                            </td>
                             <td style={{ fontSize: 11, whiteSpace: 'nowrap', padding: '10px 14px' }}>{traffic}</td>
                             <td style={{ whiteSpace: 'nowrap', padding: '10px 14px' }}>
                               {cutAddr && cutAddr !== '—' && (
