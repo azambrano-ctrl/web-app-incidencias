@@ -195,16 +195,16 @@ export default function RoutersPage() {
                     </span>
                   </div>
                   <div style={{ overflowX: 'auto' }}>
-                  <table className="data-table">
+                  <table className="data-table" style={{ borderSpacing: 0 }}>
                     <thead>
                       <tr>
-                        <th>Cliente</th>
-                        <th>Cédula</th>
-                        <th>Contrato</th>
-                        <th>IP</th>
-                        <th>Ancho de banda</th>
-                        <th>Tráfico</th>
-                        <th>Acciones</th>
+                        <th style={{ padding: '10px 14px' }}>Cliente</th>
+                        <th style={{ padding: '10px 14px' }}>Cédula</th>
+                        <th style={{ padding: '10px 14px' }}>Contrato</th>
+                        <th style={{ padding: '10px 14px' }}>IP</th>
+                        <th style={{ padding: '10px 14px' }}>Ancho de banda</th>
+                        <th style={{ padding: '10px 14px' }}>Tráfico</th>
+                        <th style={{ padding: '10px 14px' }}>Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -216,13 +216,13 @@ export default function RoutersPage() {
                         const cutAddr = (c.target || c.address || '').replace('/32', '');
                         return (
                           <tr key={i}>
-                            <td style={{ fontSize: 12, maxWidth: 200 }}>{name || '—'}</td>
-                            <td style={{ fontSize: 12 }}>{ci || '—'}</td>
-                            <td style={{ fontSize: 12 }}>{cntid || '—'}</td>
-                            <td style={{ fontSize: 12, fontFamily: 'monospace' }}>{ip}</td>
-                            <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{bw}</td>
-                            <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{traffic}</td>
-                            <td style={{ whiteSpace: 'nowrap' }}>
+                            <td style={{ fontSize: 12, maxWidth: 220, padding: '10px 14px', lineHeight: 1.4 }}>{name || '—'}</td>
+                            <td style={{ fontSize: 12, padding: '10px 14px' }}>{ci || '—'}</td>
+                            <td style={{ fontSize: 12, padding: '10px 14px' }}>{cntid || '—'}</td>
+                            <td style={{ fontSize: 12, fontFamily: 'monospace', padding: '10px 14px' }}>{ip}</td>
+                            <td style={{ fontSize: 11, whiteSpace: 'nowrap', padding: '10px 14px' }}>{bw}</td>
+                            <td style={{ fontSize: 11, whiteSpace: 'nowrap', padding: '10px 14px' }}>{traffic}</td>
+                            <td style={{ whiteSpace: 'nowrap', padding: '10px 14px' }}>
                               {cutAddr && cutAddr !== '—' && (
                                 <div style={{ display: 'flex', gap: 4 }}>
                                   <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
