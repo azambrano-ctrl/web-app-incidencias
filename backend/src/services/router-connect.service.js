@@ -172,14 +172,24 @@ async function activateClient(router, address) {
 
 async function getMetrics(router) {
   try {
-    const rows = await sendCommand(
-      router.ip, router.api_port, router.username, router.password,
-      [['/queue/simple/monitor', '=once=']]
-    );
-    // Indexar por nombre de cola para lookup rápido
+    const run = () => sendCommand(router.ip, router.api_port, router.username, router.password, [['/queue/simple/print']]);
+    const snap1 = await run();
+    await new Promise(r => setTimeout(r, 1000));
+    const snap2 = await run();
+
+    // Indexar snapshot 1 por nombre
+    const prev = {};
+    for (const r of snap1) if (r.name && r.bytes) prev[r.name] = r.bytes;
+
     const map = {};
-    for (const r of rows) {
-      if (r.name) map[r.name] = { rxRate: parseInt(r['rx-rate'] || 0), txRate: parseInt(r['tx-rate'] || 0) };
+    for (const r of snap2) {
+      if (!r.name || !r.bytes) continue;
+      const [tx2, rx2] = r.bytes.split('/').map(Number);
+      const p = prev[r.name];
+      if (p) {
+        const [tx1, rx1] = p.split('/').map(Number);
+        map[r.name] = { rxRate: Math.max(0, rx2 - rx1), txRate: Math.max(0, tx2 - tx1) };
+      }
     }
     return map;
   } catch (e) {
