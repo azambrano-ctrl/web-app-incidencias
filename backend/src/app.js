@@ -17,6 +17,7 @@ const maintenanceRoutes = require('./modules/maintenances/maintenances.routes');
 const oncallRoutes   = require('./modules/oncall/oncall.routes');
 const networkRoutes  = require('./modules/network/network.routes');
 const routerRoutes   = require('./modules/routers/routers.routes');
+const oltRoutes      = require('./modules/olts/olts.routes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -97,6 +98,7 @@ app.use('/api/v1/maintenances', maintenanceRoutes);
 app.use('/api/v1/oncall',   oncallRoutes);
 app.use('/api/v1/network',  networkRoutes);
 app.use('/api/v1/routers', routerRoutes);
+app.use('/api/v1/olts', oltRoutes);
 
 app.get('/api/v1/health', (req, res) => res.json({ status: 'ok' }));
 

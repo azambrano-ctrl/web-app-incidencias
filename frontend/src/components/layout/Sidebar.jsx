@@ -12,6 +12,7 @@ export default function Sidebar() {
     { to: '/mantenimientos', label: '🔧 Mantenimientos', roles: ['admin', 'supervisor'] },
     { to: '/guardia', label: '🛡️ Guardia', roles: ['admin', 'supervisor'] },
     { to: '/routers', label: '🌐 Routers', roles: ['admin', 'supervisor'] },
+    { to: '/olts', label: '💡 OLTs', roles: ['admin', 'supervisor'] },
     { to: '/usuarios', label: '👥 Usuarios', roles: ['admin'] },
     { to: '/reportes', label: '📈 Reportes', roles: ['admin', 'supervisor'] },
     { to: '/configuracion', label: '⚙️ Configuración', roles: ['admin'] },
