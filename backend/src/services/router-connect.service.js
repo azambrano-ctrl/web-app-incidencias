@@ -51,6 +51,7 @@ function sendCommand(ip, port, username, password, commands, timeout = 8000) {
     const socket = new net.Socket();
     const chunks = [];
     let resolved = false;
+    let commandsSent = false;
     const done = (val) => { if (!resolved) { resolved = true; socket.destroy(); resolve(val); } };
     const fail = (err) => { if (!resolved) { resolved = true; socket.destroy(); reject(err); } };
 
@@ -59,7 +60,6 @@ function sendCommand(ip, port, username, password, commands, timeout = 8000) {
     socket.on('error', fail);
 
     socket.connect(port, ip, () => {
-      // Login
       socket.write(encodeSentence(['/login', `=name=${username}`, `=password=${password}`]));
     });
 
@@ -67,13 +67,9 @@ function sendCommand(ip, port, username, password, commands, timeout = 8000) {
       chunks.push(data);
       const buf = Buffer.concat(chunks);
       const sentences = decodeSentences(buf);
+      if (sentences.length === 0) return;
 
-      // Detectar login OK
-      const loginOk = sentences.some(s => s.includes('!done'));
-      if (!loginOk) return;
-
-      // Si es solo el login, ejecutar comandos reales
-      const cmdSentences = sentences.filter(s => s.some(w => w !== '!done' && !w.startsWith('!trap')));
+      const hasDone = sentences.some(s => s.includes('!done'));
       const hasTrap = sentences.some(s => s.some(w => w.startsWith('!trap')));
 
       if (hasTrap) {
@@ -81,8 +77,12 @@ function sendCommand(ip, port, username, password, commands, timeout = 8000) {
         return fail(new Error(msg ? msg.replace('=message=', '') : 'Error de autenticación'));
       }
 
-      if (commands && loginOk && chunks.length === 1) {
-        // Primera respuesta = login OK, enviar comandos
+      if (!hasDone) return; // respuesta incompleta, esperar más datos
+
+      if (!commandsSent) {
+        // Primera respuesta = login OK
+        commandsSent = true;
+        if (!commands) return done([]); // solo testConnection
         chunks.length = 0;
         for (const cmd of commands) socket.write(encodeSentence(cmd));
         return;
