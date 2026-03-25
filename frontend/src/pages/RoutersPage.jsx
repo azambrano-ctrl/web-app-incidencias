@@ -16,7 +16,7 @@ export default function RoutersPage() {
   const [testing, setTesting] = useState(null);
 
   const { data: routers = [], isLoading } = useQuery({ queryKey: ['routers'], queryFn: getRouters });
-  const { data: clients = [], isFetching: loadingClients, isError: clientsError } = useQuery({
+  const { data: clientsData = { source: null, rows: [] }, isFetching: loadingClients, isError: clientsError } = useQuery({
     queryKey: ['router-clients', selectedRouter?.id],
     queryFn: () => getRouterClients(selectedRouter.id),
     enabled: !!selectedRouter,
@@ -150,19 +150,21 @@ export default function RoutersPage() {
               {!loadingClients && clientsError && (
                 <p style={{ color: '#dc2626', fontSize: 13 }}>No se pudo conectar al router. Verifica IP, puerto y credenciales.</p>
               )}
-              {!loadingClients && !clientsError && clients.length === 0 && (
+              {!loadingClients && !clientsError && clientsData.rows.length === 0 && (
                 <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Sin clientes activos o el router no respondió.</p>
               )}
-              {clients.length > 0 && (
-                <table className="data-table">
+              {clientsData.rows.length > 0 && (
+                <>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Fuente: <strong>{clientsData.source}</strong> — {clientsData.rows.length} entradas</p>
+                  <table className="data-table">
                   <thead>
                     <tr>
-                      {Object.keys(clients[0]).map(k => <th key={k}>{k}</th>)}
+                      {Object.keys(clientsData.rows[0]).map(k => <th key={k}>{k}</th>)}
                       <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {clients.map((c, i) => (
+                    {clientsData.rows.map((c, i) => (
                       <tr key={i}>
                         {Object.values(c).map((v, j) => <td key={j} style={{ fontSize: 12 }}>{v}</td>)}
                         <td style={{ display: 'flex', gap: 4 }}>
@@ -181,6 +183,7 @@ export default function RoutersPage() {
                     ))}
                   </tbody>
                 </table>
+                </>
               )}
             </div>
           )}

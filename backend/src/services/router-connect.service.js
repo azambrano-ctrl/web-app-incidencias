@@ -118,24 +118,23 @@ async function testConnection(router) {
 }
 
 async function getClients(router) {
-  try {
-    // Intentar PPP activos primero (más común en ISPs)
-    const ppp = await sendCommand(
-      router.ip, router.api_port, router.username, router.password,
-      [['/ppp/active/print']]
-    );
-    if (ppp.length) return ppp;
-
-    // Fallback: hotspot
-    const hotspot = await sendCommand(
-      router.ip, router.api_port, router.username, router.password,
-      [['/ip/hotspot/active/print']]
-    );
-    return hotspot;
-  } catch (e) {
-    console.error('[RouterSvc] getClients error:', e.message);
-    throw e;
+  const run = (cmds) => sendCommand(router.ip, router.api_port, router.username, router.password, cmds);
+  const attempts = [
+    { label: 'ppp',     cmds: [['/ppp/active/print']] },
+    { label: 'hotspot', cmds: [['/ip/hotspot/active/print']] },
+    { label: 'dhcp',    cmds: [['/ip/dhcp-server/lease/print']] },
+    { label: 'queue',   cmds: [['/queue/simple/print']] },
+  ];
+  for (const { label, cmds } of attempts) {
+    try {
+      const rows = await run(cmds);
+      console.log(`[RouterSvc] ${label}: ${rows.length} entradas`);
+      if (rows.length) return { source: label, rows };
+    } catch (e) {
+      console.warn(`[RouterSvc] ${label} falló: ${e.message}`);
+    }
   }
+  return { source: null, rows: [] };
 }
 
 async function cutClient(router, address) {
