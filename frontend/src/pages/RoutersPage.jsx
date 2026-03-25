@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRouters, createRouter, updateRouter, deleteRouter, testConnection, getRouterClients, cutClient, activateClient } from '../api/routers.api';
 import Sidebar from '../components/layout/Sidebar';
@@ -7,12 +7,32 @@ import { toast } from 'react-hot-toast';
 
 const EMPTY = { description: '', ip: '', username: '', password: '', api_port: 8728, cut_label: 'CORTE', active_label: 'HABILITADOS', status: 'active' };
 
+function parseQueueName(raw = '') {
+  const ci    = (raw.match(/CI\(([^)]+)\)/)     || [])[1] || '';
+  const cntid = (raw.match(/CNTID\(([^)]+)\)/)  || [])[1] || '';
+  const name  = raw.replace(/CI\([^)]*\)/g, '').replace(/CNTID\([^)]*\)/g, '').replace(/CNTNUM\([^)]*\)/g, '').replace(/-+/g, ' ').trim();
+  return { ci, cntid, name };
+}
+
+function fmtBw(val = '') {
+  const [up, dn] = val.split('/');
+  const mbps = n => n ? `${(parseInt(n) / 1e6).toFixed(0)} Mbps` : '—';
+  return `↑${mbps(up)} ↓${mbps(dn)}`;
+}
+
+function fmtBytes(val = '') {
+  const [up, dn] = val.split('/');
+  const fmt = n => { const v = parseInt(n) || 0; return v > 1e9 ? `${(v/1e9).toFixed(1)}GB` : v > 1e6 ? `${(v/1e6).toFixed(1)}MB` : `${(v/1e3).toFixed(0)}KB`; };
+  return `↑${fmt(up)} ↓${fmt(dn)}`;
+}
+
 export default function RoutersPage() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [selectedRouter, setSelectedRouter] = useState(null);
+  const [clientSearch, setClientSearch] = useState('');
   const [testing, setTesting] = useState(null);
 
   const { data: routers = [], isLoading } = useQuery({ queryKey: ['routers'], queryFn: getRouters });
@@ -23,6 +43,14 @@ export default function RoutersPage() {
     refetchInterval: 30000,
     retry: false,
   });
+
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.toLowerCase();
+    return clientsData.rows.filter(c => {
+      const raw = c.name || c.address || '';
+      return !q || raw.toLowerCase().includes(q) || (c.target || '').includes(q) || (c.address || '').includes(q);
+    });
+  }, [clientsData.rows, clientSearch]);
 
   const saveMut = useMutation({
     mutationFn: (data) => editing ? updateRouter(editing.id, data) : createRouter(data),
@@ -155,34 +183,65 @@ export default function RoutersPage() {
               )}
               {clientsData.rows.length > 0 && (
                 <>
-                  <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Fuente: <strong>{clientsData.source}</strong> — {clientsData.rows.length} entradas</p>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 10 }}>
+                    <input
+                      placeholder="Buscar por nombre, cédula o IP..."
+                      value={clientSearch}
+                      onChange={e => setClientSearch(e.target.value)}
+                      style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 13 }}
+                    />
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {filteredClients.length} / {clientsData.rows.length} — <strong>{clientsData.source}</strong>
+                    </span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
                   <table className="data-table">
-                  <thead>
-                    <tr>
-                      {Object.keys(clientsData.rows[0]).map(k => <th key={k}>{k}</th>)}
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clientsData.rows.map((c, i) => (
-                      <tr key={i}>
-                        {Object.values(c).map((v, j) => <td key={j} style={{ fontSize: 12 }}>{v}</td>)}
-                        <td style={{ display: 'flex', gap: 4 }}>
-                          {c.address && <>
-                            <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
-                              onClick={() => cutMut.mutate({ id: selectedRouter.id, address: c.address })}>
-                              Cortar
-                            </button>
-                            <button className="btn btn-sm" style={{ background: '#dcfce7', color: '#16a34a', border: '1px solid #86efac', fontSize: 11 }}
-                              onClick={() => activateMut.mutate({ id: selectedRouter.id, address: c.address })}>
-                              Activar
-                            </button>
-                          </>}
-                        </td>
+                    <thead>
+                      <tr>
+                        <th>Cliente</th>
+                        <th>Cédula</th>
+                        <th>Contrato</th>
+                        <th>IP</th>
+                        <th>Ancho de banda</th>
+                        <th>Tráfico</th>
+                        <th>Acciones</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredClients.map((c, i) => {
+                        const { ci, cntid, name } = parseQueueName(c.name || '');
+                        const ip = c.target || c.address || '—';
+                        const bw = c['max-limit'] ? fmtBw(c['max-limit']) : '—';
+                        const traffic = c.bytes ? fmtBytes(c.bytes) : '—';
+                        const cutAddr = (c.target || c.address || '').replace('/32', '');
+                        return (
+                          <tr key={i}>
+                            <td style={{ fontSize: 12, maxWidth: 200 }}>{name || '—'}</td>
+                            <td style={{ fontSize: 12 }}>{ci || '—'}</td>
+                            <td style={{ fontSize: 12 }}>{cntid || '—'}</td>
+                            <td style={{ fontSize: 12, fontFamily: 'monospace' }}>{ip}</td>
+                            <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{bw}</td>
+                            <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{traffic}</td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {cutAddr && cutAddr !== '—' && (
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
+                                    onClick={() => cutMut.mutate({ id: selectedRouter.id, address: cutAddr })}>
+                                    Cortar
+                                  </button>
+                                  <button className="btn btn-sm" style={{ background: '#dcfce7', color: '#16a34a', border: '1px solid #86efac', fontSize: 11 }}
+                                    onClick={() => activateMut.mutate({ id: selectedRouter.id, address: cutAddr })}>
+                                    Activar
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  </div>
                 </>
               )}
             </div>
