@@ -105,7 +105,7 @@ export default function IncidentForm({ initial, onSubmit, onCancel, loading }) {
         <form onSubmit={handleSubmit} className="incident-form">
           <div className="form-row">
             <label>Descripción *
-              <textarea value={form.description} onChange={e => set('description', e.target.value)} required rows={3} placeholder="Describe el problema..." />
+              <textarea value={form.description} onChange={e => set('description', e.target.value.toUpperCase())} required rows={3} placeholder="Describe el problema..." />
             </label>
           </div>
           <div className="form-row two-cols">
