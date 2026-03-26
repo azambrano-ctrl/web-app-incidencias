@@ -77,8 +77,10 @@ export default function OLTPage() {
     knownOnuIds.current = currentIds;
   }, [onus]);
 
-  // Resetear seguimiento y puerto al cambiar de OLT
-  useEffect(() => { knownOnuIds.current = null; setSelectedPort('all'); }, [selectedOlt?.id]);
+  // Resetear puerto al cambiar de OLT
+  useEffect(() => { setSelectedPort('all'); }, [selectedOlt?.id]);
+  // Resetear seguimiento al cambiar de OLT o de puerto
+  useEffect(() => { knownOnuIds.current = null; }, [selectedOlt?.id, selectedPort]);
 
   const filteredOnus = useMemo(() => {
     const q = search.toLowerCase();
