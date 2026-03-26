@@ -98,4 +98,11 @@ router.post('/:id/provision', authorize('admin'), async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.delete('/:id/onus/:onuId', authorize('admin'), async (req, res, next) => {
+  try {
+    const olt = await svc.getOlt(req.params.id);
+    res.json(await oltSvc.deleteONU(olt, decodeURIComponent(req.params.onuId)));
+  } catch (e) { next(e); }
+});
+
 module.exports = router;

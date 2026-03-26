@@ -137,6 +137,16 @@ const BRANDS = {
       return { ok: true };
     },
 
+    deleteONU: async (olt, onuId) => {
+      // onuId: gpon-onu_1/1/2:24 → interface gpon-olt_1/1/2, no onu 24
+      const m = onuId.match(/gpon-onu_(\d+\/\d+\/\d+):(\d+)/i);
+      if (!m) throw new Error(`ONU ID inválido: ${onuId}`);
+      const [, port, index] = m;
+      const cmds = ['enable', 'config', `interface gpon-olt_${port}`, `no onu ${index}`, 'quit', 'quit'];
+      await sshExec(olt, cmds, 20000);
+      return { ok: true };
+    },
+
     provision: async (olt, { port, sn, profile, vlan, nombre, description }) => {
       const desc = nombre || description || sn;
       const cmds = [
@@ -320,6 +330,12 @@ async function rebootONU(olt, onuId) {
   return getBrand(olt).reboot(olt, onuId);
 }
 
+async function deleteONU(olt, onuId) {
+  const b = getBrand(olt);
+  if (!b.deleteONU) throw new Error('Esta marca no soporta eliminación de ONU');
+  return b.deleteONU(olt, onuId);
+}
+
 async function provisionONU(olt, data) {
   return getBrand(olt).provision(olt, data);
 }
@@ -336,4 +352,4 @@ async function getSignals(olt, onuIds) {
   return result;
 }
 
-module.exports = { testConnection, listONUs, getSignal, getSignals, rebootONU, provisionONU };
+module.exports = { testConnection, listONUs, getSignal, getSignals, rebootONU, provisionONU, deleteONU };

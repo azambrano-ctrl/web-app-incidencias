@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial, getONUSignals } from '../api/olts.api';
+import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial, getONUSignals, deleteONUFromOlt } from '../api/olts.api';
 import { searchClients } from '../api/clients.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
@@ -122,6 +122,12 @@ export default function OLTPage() {
     mutationFn: (data) => provisionONU(selectedOlt.id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus'] }); setShowProvision(false); setProvForm(PROV_EMPTY); toast.success('ONU provisionada'); },
     onError: (e) => toast.error(e?.response?.data?.message || 'Error al provisionar'),
+  });
+
+  const deleteOnuMut = useMutation({
+    mutationFn: ({ id, onuId }) => deleteONUFromOlt(id, onuId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus'] }); toast.success('ONU eliminada del OLT'); },
+    onError: () => toast.error('Error al eliminar ONU del OLT'),
   });
 
   const handleTest = async (olt) => {
@@ -347,26 +353,38 @@ export default function OLTPage() {
                               : <span style={{ color: '#94a3b8' }}>Sin vincular</span>}
                           </td>
                           <td style={{ padding: '10px 14px' }}>
-                            <div style={{ display: 'flex', gap: 4 }}>
-                              <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', fontSize: 11 }}
-                                onClick={() => window.confirm(`¿Reiniciar ONU ${onu.id}?`) && rebootMut.mutate({ id: selectedOlt.id, onuId: onu.id })}>
-                                Reiniciar
-                              </button>
-                              {onu.description
-                                ? <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
-                                    onClick={() => handleUnlink(onu)} disabled={linking}>
-                                    Desvincular
-                                  </button>
-                                : <>
-                                    <button className="btn btn-sm" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: 11 }}
-                                      onClick={() => { setLinkOnu(onu); setClientSearch(''); setClientResults([]); }}>
-                                      Vincular
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {onu.status === 'online' && (
+                                <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', fontSize: 11 }}
+                                  onClick={() => window.confirm(`¿Reiniciar ONU ${onu.id}?`) && rebootMut.mutate({ id: selectedOlt.id, onuId: onu.id })}>
+                                  Reiniciar
+                                </button>
+                              )}
+                              {onu.status === 'online' && (
+                                onu.description
+                                  ? <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
+                                      onClick={() => handleUnlink(onu)} disabled={linking}>
+                                      Desvincular
                                     </button>
-                                    <button className="btn btn-sm" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac', fontSize: 11 }}
-                                      onClick={() => openProvision(onu)}>
-                                      Provisionar
-                                    </button>
-                                  </>}
+                                  : <>
+                                      <button className="btn btn-sm" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: 11 }}
+                                        onClick={() => { setLinkOnu(onu); setClientSearch(''); setClientResults([]); }}>
+                                        Vincular
+                                      </button>
+                                      <button className="btn btn-sm" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac', fontSize: 11 }}
+                                        onClick={() => openProvision(onu)}>
+                                        Provisionar
+                                      </button>
+                                    </>
+                              )}
+                              {onu.status === 'offline' && (
+                                <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
+                                  onClick={() => window.confirm(`¿Eliminar ONU ${onu.id} del OLT?\n\nEsta acción la borra permanentemente del equipo.`) &&
+                                    deleteOnuMut.mutate({ id: selectedOlt.id, onuId: onu.id })}
+                                  disabled={deleteOnuMut.isPending}>
+                                  Eliminar del OLT
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -12,3 +12,4 @@ export const rebootONU = (id, onuId) => api.post(`/olts/${id}/onus/${encodeURICo
 export const provisionONU = (id, data) => api.post(`/olts/${id}/provision`, data).then(r => r.data);
 export const linkOnuSerial = (clientId, serial) => api.patch(`/clients/${clientId}/onu-serial`, { onu_serial: serial }).then(r => r.data);
 export const getONUSignals = (id, ids) => api.post(`/olts/${id}/onus/signals`, { ids }).then(r => r.data);
+export const deleteONUFromOlt = (id, onuId) => api.delete(`/olts/${id}/onus/${encodeURIComponent(onuId)}`).then(r => r.data);
