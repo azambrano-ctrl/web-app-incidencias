@@ -65,9 +65,19 @@ const BRANDS = {
       const combined = await sshExec(olt, allCmds, timeout);
       if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] combined output:\n', combined);
 
-      // Separar state y baseinfo del output combinado
-      const stateOut = combined;
-      const baseOut  = combined;
+      // Separar secciones: state vs baseinfo usando los comandos como delimitadores
+      // El output tiene bloques intercalados: ...state_p1...baseinfo_p1...state_p2...baseinfo_p2...
+      const stateBlocks = [];
+      const baseBlocks  = [];
+      const sections = combined.split(/show gpon onu (state|baseinfo) gpon-olt_/i);
+      for (let i = 1; i < sections.length; i += 2) {
+        const type = sections[i].toLowerCase();   // 'state' o 'baseinfo'
+        const body = sections[i + 1] || '';
+        if (type === 'state')    stateBlocks.push(body);
+        else if (type === 'baseinfo') baseBlocks.push(body);
+      }
+      const stateOut = stateBlocks.join('\n');
+      const baseOut  = baseBlocks.join('\n');
 
       // Parsear SN desde baseinfo: gpon-onu_1/1/1:10   ZTE-F625  sn  SN:GPON007AAE50  ready
       const snMap = {};
@@ -79,11 +89,14 @@ const BRANDS = {
 
       // Parsear estado desde state: 5 columnas — OnuIndex Admin OMCC O7 Phase
       // gpon-onu_1/1/1:10   enable  enable  operation  working
+      const seen = new Set();
       const onus = [];
       const stateRe = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+\S+\s+\S+\s+\S+\s+(\S+)/gi;
       let m;
       while ((m = stateRe.exec(stateOut)) !== null) {
         const id = `gpon-onu_${m[1]}:${m[2]}`;
+        if (seen.has(id)) continue;
+        seen.add(id);
         const phase = m[3].toLowerCase();
         const status = phase === 'working' ? 'online' : 'offline';
         onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
