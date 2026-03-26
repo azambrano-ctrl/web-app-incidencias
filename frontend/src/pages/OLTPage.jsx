@@ -11,7 +11,7 @@ const CONN_TYPES = { ssh: 'SSH', telnet: 'Telnet', snmp: 'SNMP' };
 
 const EMPTY = { description: '', ip: '', username: '', password: '', ssh_port: 22, brand: 'zte', connection_type: 'ssh', snmp_community: 'public', status: 'active', pon_frame: 1, pon_slot: 1, pon_ports: 8 };
 
-const PROV_EMPTY = { port: '', sn: '', profile: '1', vlan: '100', description: '' };
+const PROV_EMPTY = { port: '', sn: '', profile: '1', vlan: '100', nombre: '', description: '' };
 
 function SignalBar({ dbm }) {
   if (dbm === null || dbm === undefined) return <span style={{ color: '#94a3b8' }}>—</span>;
@@ -168,7 +168,7 @@ export default function OLTPage() {
       // Extraer puerto: gpon-onu_1/1/4:128 → "1/1/4"
       const match = onu.id?.match(/gpon-onu_(\d+\/\d+\/\d+):/i);
       const port = match ? match[1] : '';
-      setProvForm({ port, sn: onu.mac || '', profile: '1', vlan: '100', description: onu.description || '' });
+      setProvForm({ port, sn: onu.mac || '', profile: '1', vlan: '100', nombre: onu.description || '', description: onu.id || '' });
     } else {
       setProvForm(PROV_EMPTY);
     }
@@ -531,8 +531,12 @@ export default function OLTPage() {
                       <input className="form-input" value={provForm.vlan} onChange={e => setProvForm(f => ({ ...f, vlan: e.target.value }))} required />
                     </div>
                     <div>
-                      <label className="form-label">Descripción (nombre del cliente)</label>
-                      <input className="form-input" value={provForm.description} onChange={e => setProvForm(f => ({ ...f, description: e.target.value }))} required />
+                      <label className="form-label">Nombre (cliente)</label>
+                      <input className="form-input" value={provForm.nombre} onChange={e => setProvForm(f => ({ ...f, nombre: e.target.value }))} required placeholder="Ej: Juan Pérez" />
+                    </div>
+                    <div>
+                      <label className="form-label">Descripción</label>
+                      <input className="form-input" value={provForm.description} onChange={e => setProvForm(f => ({ ...f, description: e.target.value }))} placeholder="Ej: gpon-onu_1/1/4:128" />
                     </div>
                   </div>
                   <div className="modal-footer">

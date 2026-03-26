@@ -137,12 +137,13 @@ const BRANDS = {
       return { ok: true };
     },
 
-    provision: async (olt, { port, sn, profile, vlan, description }) => {
+    provision: async (olt, { port, sn, profile, vlan, nombre, description }) => {
+      const desc = nombre || description || sn;
       const cmds = [
         'enable', 'config',
         `interface gpon-olt_${port}`,
         `onu ${sn.slice(-2)} type AUTO sn-auth ${sn} omci ont-lineprofile-id ${profile} ont-srvprofile-id ${profile}`,
-        `onu-id ${sn.slice(-2)} description ${description}`,
+        `onu-id ${sn.slice(-2)} description ${desc}`,
         'quit',
         `interface gpon-onu_${port}:${sn.slice(-2)}`,
         `service-port 1 vport 1 user-vlan ${vlan} vlan ${vlan}`,
