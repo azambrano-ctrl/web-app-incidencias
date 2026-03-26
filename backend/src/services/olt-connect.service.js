@@ -55,21 +55,18 @@ const BRANDS = {
       const frame = olt.pon_frame || 1;
       const slot  = olt.pon_slot  || 1;
       const ports = olt.pon_ports || 8;
-      const stateCmds = [];
-      const baseCmds  = [];
+      const allCmds = ['terminal length 0'];
       for (let p = 1; p <= ports; p++) {
-        stateCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
-        baseCmds.push(`show gpon onu baseinfo gpon-olt_${frame}/${slot}/${p}`);
+        allCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
+        allCmds.push(`show gpon onu baseinfo gpon-olt_${frame}/${slot}/${p}`);
       }
-      const timeout = Math.max(25000, ports * 5000);
-      const [stateOut, baseOut] = await Promise.all([
-        sshExec(olt, ['terminal length 0', ...stateCmds], timeout),
-        sshExec(olt, ['terminal length 0', ...baseCmds],  timeout),
-      ]);
-      if (process.env.OLT_DEBUG === '1') {
-        console.log('[OLT:ZTE] state output:\n', stateOut);
-        console.log('[OLT:ZTE] baseinfo output:\n', baseOut);
-      }
+      const timeout = Math.max(30000, ports * 6000);
+      const combined = await sshExec(olt, allCmds, timeout);
+      if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] combined output:\n', combined);
+
+      // Separar state y baseinfo del output combinado
+      const stateOut = combined;
+      const baseOut  = combined;
 
       // Parsear SN desde baseinfo: gpon-onu_1/1/1:10   ZTE-F625  sn  SN:GPON007AAE50  ready
       const snMap = {};
@@ -91,7 +88,7 @@ const BRANDS = {
         onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
       }
 
-      // Obtener señal óptica de todas las ONUs en una sola sesión SSH
+      // Obtener señal óptica en la misma sesión (ya está en combined) o nueva si hay ONUs
       if (onus.length > 0) {
         const powerCmds = onus.map(o => `show pon power attenuation ${o.id}`);
         const powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], timeout).catch(() => '');
