@@ -88,17 +88,24 @@ const BRANDS = {
         onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
       }
 
-      // Obtener señal óptica en la misma sesión (ya está en combined) o nueva si hay ONUs
-      if (onus.length > 0) {
-        const powerCmds = onus.map(o => `show pon power attenuation ${o.id}`);
-        const powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], timeout).catch(() => '');
+      // Obtener señal óptica solo para ONUs online (offline siempre devuelve "no signal")
+      const onlineOnus = onus.filter(o => o.status === 'online');
+      if (onlineOnus.length > 0) {
+        // Esperar un momento para que el ZTE libere la sesión anterior
+        await new Promise(r => setTimeout(r, 2000));
+        const powerCmds = onlineOnus.map(o => `show pon power attenuation ${o.id}`);
+        const powerTimeout = Math.max(30000, onlineOnus.length * 3000);
+        let powerOut = '';
+        try {
+          powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], powerTimeout);
+        } catch (e) {
+          console.error('[OLT:ZTE] Error al obtener señal óptica:', e.message);
+        }
         if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] power output:\n', powerOut);
 
-        // Separar la salida por bloques — cada bloque va precedido del prompt + comando
-        for (const onu of onus) {
-          // Buscar el bloque correspondiente a esta ONU
+        for (const onu of onlineOnus) {
           const escaped = onu.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|TroncalNet|$)`, 'i');
+          const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|#|$)`, 'i');
           const block = (powerOut.match(blockRe) || [''])[0];
           const rx = (block.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
           const tx = (block.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
