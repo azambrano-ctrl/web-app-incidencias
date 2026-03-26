@@ -90,6 +90,26 @@ const BRANDS = {
         const status = phase === 'working' ? 'online' : 'offline';
         onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
       }
+
+      // Obtener señal óptica de todas las ONUs en una sola sesión SSH
+      if (onus.length > 0) {
+        const powerCmds = onus.map(o => `show pon power attenuation ${o.id}`);
+        const powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], timeout).catch(() => '');
+        if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] power output:\n', powerOut);
+
+        // Separar la salida por bloques — cada bloque va precedido del prompt + comando
+        for (const onu of onus) {
+          // Buscar el bloque correspondiente a esta ONU
+          const escaped = onu.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|TroncalNet|$)`, 'i');
+          const block = (powerOut.match(blockRe) || [''])[0];
+          const rx = (block.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
+          const tx = (block.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
+          onu.rxPower = rx ? parseFloat(rx) : null;
+          onu.txPower = tx ? parseFloat(tx) : null;
+        }
+      }
+
       return onus;
     },
 
