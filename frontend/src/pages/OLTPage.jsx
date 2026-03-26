@@ -33,12 +33,13 @@ export default function OLTPage() {
   const [clientSearch, setClientSearch] = useState('');
   const [clientResults, setClientResults] = useState([]);
   const [linking, setLinking] = useState(false);
+  const [selectedPort, setSelectedPort] = useState('all');
 
   const { data: olts = [], isLoading } = useQuery({ queryKey: ['olts'], queryFn: getOlts });
 
   const { data: onus = [], isFetching: loadingOnus, isError: onusError } = useQuery({
-    queryKey: ['olt-onus', selectedOlt?.id],
-    queryFn: () => getONUs(selectedOlt.id),
+    queryKey: ['olt-onus', selectedOlt?.id, selectedPort],
+    queryFn: () => getONUs(selectedOlt.id, selectedPort === 'all' ? null : selectedPort),
     enabled: !!selectedOlt,
     refetchInterval: 30000,
     retry: false,
@@ -47,7 +48,7 @@ export default function OLTPage() {
   // Segunda fase: señales ópticas (carga tras obtener la lista)
   const onlineIds = useMemo(() => onus.filter(o => o.status === 'online').map(o => o.id), [onus]);
   const { data: signals = {} } = useQuery({
-    queryKey: ['olt-signals', selectedOlt?.id, onlineIds.join(',')],
+    queryKey: ['olt-signals', selectedOlt?.id, selectedPort, onlineIds.join(',')],
     queryFn: () => getONUSignals(selectedOlt.id, onlineIds),
     enabled: !!selectedOlt && onlineIds.length > 0,
     refetchInterval: 60000,
@@ -76,8 +77,8 @@ export default function OLTPage() {
     knownOnuIds.current = currentIds;
   }, [onus]);
 
-  // Resetear seguimiento al cambiar de OLT
-  useEffect(() => { knownOnuIds.current = null; }, [selectedOlt?.id]);
+  // Resetear seguimiento y puerto al cambiar de OLT
+  useEffect(() => { knownOnuIds.current = null; setSelectedPort('all'); }, [selectedOlt?.id]);
 
   const filteredOnus = useMemo(() => {
     const q = search.toLowerCase();
@@ -104,13 +105,13 @@ export default function OLTPage() {
 
   const rebootMut = useMutation({
     mutationFn: ({ id, onuId }) => rebootONU(id, onuId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] }); toast.success('ONU reiniciada'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus'] }); toast.success('ONU reiniciada'); },
     onError: () => toast.error('Error al reiniciar ONU'),
   });
 
   const provMut = useMutation({
     mutationFn: (data) => provisionONU(selectedOlt.id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] }); setShowProvision(false); setProvForm(PROV_EMPTY); toast.success('ONU provisionada'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['olt-onus'] }); setShowProvision(false); setProvForm(PROV_EMPTY); toast.success('ONU provisionada'); },
     onError: (e) => toast.error(e?.response?.data?.message || 'Error al provisionar'),
   });
 
@@ -134,7 +135,7 @@ export default function OLTPage() {
     setLinking(true);
     try {
       await linkOnuSerial(clientId, linkOnu.mac);
-      qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] });
+      qc.invalidateQueries({ queryKey: ['olt-onus'] });
       toast.success('ONU vinculada al cliente');
       setLinkOnu(null); setClientSearch(''); setClientResults([]);
     } catch { toast.error('Error al vincular'); }
@@ -146,7 +147,7 @@ export default function OLTPage() {
     setLinking(true);
     try {
       await linkOnuSerial(onu.clientId, null);
-      qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] });
+      qc.invalidateQueries({ queryKey: ['olt-onus'] });
       toast.success('Vínculo eliminado');
     } catch { toast.error('Error al desvincular'); }
     finally { setLinking(false); }
@@ -243,9 +244,32 @@ export default function OLTPage() {
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-sm btn-primary" onClick={() => setShowProvision(true)}>+ Provisionar ONU</button>
-                  <button className="btn btn-sm btn-secondary" onClick={() => qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt.id] })}>Actualizar</button>
+                  <button className="btn btn-sm btn-secondary" onClick={() => qc.invalidateQueries({ queryKey: ['olt-onus'] })}>Actualizar</button>
                 </div>
               </div>
+
+              {/* Selector de puerto PON */}
+              {selectedOlt.brand === 'zte' && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                  {[{ label: 'Todos', value: 'all' },
+                    ...Array.from({ length: selectedOlt.pon_ports || 8 }, (_, i) => ({
+                      label: `${selectedOlt.pon_frame || 1}/${selectedOlt.pon_slot || 1}/${i + 1}`,
+                      value: String(i + 1),
+                    }))
+                  ].map(({ label, value }) => (
+                    <button key={value}
+                      onClick={() => setSelectedPort(value)}
+                      style={{
+                        padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        border: selectedPort === value ? '1.5px solid #2563eb' : '1px solid #e2e8f0',
+                        background: selectedPort === value ? '#eff6ff' : 'white',
+                        color: selectedPort === value ? '#2563eb' : '#374151',
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Búsqueda */}
               {onus.length > 0 && (

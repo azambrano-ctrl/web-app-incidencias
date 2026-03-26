@@ -51,16 +51,17 @@ function sshExec(olt, commands, timeout = 15000) {
 const BRANDS = {
 
   zte: {
-    listONUs: async (olt) => {
+    listONUs: async (olt, { port } = {}) => {
       const frame = olt.pon_frame || 1;
       const slot  = olt.pon_slot  || 1;
       const ports = olt.pon_ports || 8;
+      const portList = port ? [parseInt(port)] : Array.from({ length: ports }, (_, i) => i + 1);
       const allCmds = ['terminal length 0'];
-      for (let p = 1; p <= ports; p++) {
+      for (const p of portList) {
         allCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
         allCmds.push(`show gpon onu baseinfo gpon-olt_${frame}/${slot}/${p}`);
       }
-      const timeout = Math.max(30000, ports * 6000);
+      const timeout = Math.max(30000, portList.length * 6000);
       const combined = await sshExec(olt, allCmds, timeout);
       if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] combined output:\n', combined);
 
@@ -306,8 +307,8 @@ async function testConnection(olt) {
   }
 }
 
-async function listONUs(olt) {
-  return getBrand(olt).listONUs(olt);
+async function listONUs(olt, options = {}) {
+  return getBrand(olt).listONUs(olt, options);
 }
 
 async function getSignal(olt, onuId) {

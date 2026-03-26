@@ -55,7 +55,7 @@ router.post('/:id/test', async (req, res, next) => {
 router.get('/:id/onus', async (req, res, next) => {
   try {
     const olt = await svc.getOlt(req.params.id);
-    const onus = await oltSvc.listONUs(olt);
+    const onus = await oltSvc.listONUs(olt, { port: req.query.port });
     // Enriquecer con nombre de cliente por serial (mac = SN en ZTE)
     const serials = onus.map(o => o.mac).filter(Boolean);
     const clientMap = await getClientsBySerials(serials);
