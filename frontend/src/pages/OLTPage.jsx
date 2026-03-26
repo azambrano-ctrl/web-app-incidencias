@@ -8,7 +8,7 @@ import { toast } from 'react-hot-toast';
 const BRANDS = { zte: 'ZTE', huawei: 'Huawei', fiberhome: 'FiberHome', vsol: 'VSOL', nokia: 'Nokia' };
 const CONN_TYPES = { ssh: 'SSH', telnet: 'Telnet', snmp: 'SNMP' };
 
-const EMPTY = { description: '', ip: '', username: '', password: '', ssh_port: 22, brand: 'zte', connection_type: 'ssh', snmp_community: 'public', status: 'active' };
+const EMPTY = { description: '', ip: '', username: '', password: '', ssh_port: 22, brand: 'zte', connection_type: 'ssh', snmp_community: 'public', status: 'active', pon_frame: 1, pon_slot: 1, pon_ports: 8 };
 
 const PROV_EMPTY = { port: '', sn: '', profile: '1', vlan: '100', description: '' };
 
@@ -289,6 +289,22 @@ export default function OLTPage() {
                         <label className="form-label">Comunidad SNMP</label>
                         <input className="form-input" value={form.snmp_community} onChange={e => setForm(f => ({ ...f, snmp_community: e.target.value }))} />
                       </div>
+                    )}
+                    {form.brand === 'zte' && (
+                      <>
+                        <div>
+                          <label className="form-label">Frame PON</label>
+                          <input className="form-input" type="number" min="1" value={form.pon_frame ?? 1} onChange={e => setForm(f => ({ ...f, pon_frame: parseInt(e.target.value) || 1 }))} />
+                        </div>
+                        <div>
+                          <label className="form-label">Slot PON</label>
+                          <input className="form-input" type="number" min="1" value={form.pon_slot ?? 1} onChange={e => setForm(f => ({ ...f, pon_slot: parseInt(e.target.value) || 1 }))} />
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <label className="form-label">Cantidad de puertos GPON a escanear</label>
+                          <input className="form-input" type="number" min="1" max="16" value={form.pon_ports ?? 8} onChange={e => setForm(f => ({ ...f, pon_ports: parseInt(e.target.value) || 8 }))} />
+                        </div>
+                      </>
                     )}
                     <div>
                       <label className="form-label">Estado</label>

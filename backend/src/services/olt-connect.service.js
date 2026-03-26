@@ -52,22 +52,42 @@ const BRANDS = {
 
   zte: {
     listONUs: async (olt) => {
-      const out = await sshExec(olt, ['enable', 'show gpon onu state']);
+      const frame = olt.pon_frame || 1;
+      const slot  = olt.pon_slot  || 1;
+      const ports = olt.pon_ports || 8;
+      const portCmds = [];
+      for (let p = 1; p <= ports; p++) {
+        portCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
+      }
+      const timeout = Math.max(20000, ports * 4000);
+      const out = await sshExec(olt, ['enable', 'terminal length 0', ...portCmds], timeout);
+      if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] listONUs raw output:\n', out);
       const onus = [];
-      // Líneas como: gpon-onu_1/1/1:1   1234567890ab  online   OMCI
-      const re = /gpon-onu_(\S+)\s+(\S+)\s+(online|offline|los)\s*/gi;
+      // Formato ZTE C320: gpon-onu_1/1/1:1  ZTEGXXXXXX  enable  working  up  up
+      const re = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+(\S+)\s+\S+\s+(\S+)/gi;
       let m;
       while ((m = re.exec(out)) !== null) {
-        onus.push({ id: `gpon-onu_${m[1]}`, mac: m[2], status: m[3].toLowerCase(), port: m[1].split(':')[0] });
+        const phase = m[4].toLowerCase();
+        const status = phase === 'working' ? 'online' : 'offline';
+        onus.push({ id: `gpon-onu_${m[1]}:${m[2]}`, mac: m[3], status, port: m[1] });
       }
       return onus;
     },
 
     getSignal: async (olt, onuId) => {
-      const out = await sshExec(olt, ['enable', `show gpon onu detail-info ${onuId}`]);
-      const rx = (out.match(/Rx optical power\s*:\s*([-\d.]+)/i) || [])[1];
-      const tx = (out.match(/Tx optical power\s*:\s*([-\d.]+)/i) || [])[1];
-      return { rxPower: rx ? parseFloat(rx) : null, txPower: tx ? parseFloat(tx) : null };
+      // onuId formato: gpon-onu_1/1/1:3
+      const match = onuId.match(/gpon-onu_(\d+\/\d+\/\d+):(\d+)/);
+      if (!match) return { rxPower: null, txPower: null };
+      const [, port, num] = match;
+      const out = await sshExec(olt, ['enable', 'terminal length 0', `show gpon onu optical-info gpon-olt_${port}`]);
+      if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] getSignal raw output:\n', out);
+      // Formato: "  1   -22.34   2.50   3.28   9.5   42.1"
+      const re = new RegExp(`^\\s*${num}\\s+([-\\d.]+)\\s+([-\\d.]+)`, 'm');
+      const sig = out.match(re);
+      return {
+        rxPower: sig ? parseFloat(sig[1]) : null,
+        txPower: sig ? parseFloat(sig[2]) : null,
+      };
     },
 
     reboot: async (olt, onuId) => {
