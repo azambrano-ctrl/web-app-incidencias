@@ -55,38 +55,57 @@ const BRANDS = {
       const frame = olt.pon_frame || 1;
       const slot  = olt.pon_slot  || 1;
       const ports = olt.pon_ports || 8;
-      const portCmds = [];
+      const stateCmds = [];
+      const baseCmds  = [];
       for (let p = 1; p <= ports; p++) {
-        portCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
+        stateCmds.push(`show gpon onu state gpon-olt_${frame}/${slot}/${p}`);
+        baseCmds.push(`show gpon onu baseinfo gpon-olt_${frame}/${slot}/${p}`);
       }
-      const timeout = Math.max(20000, ports * 4000);
-      const out = await sshExec(olt, ['enable', 'terminal length 0', ...portCmds], timeout);
-      if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] listONUs raw output:\n', out);
+      const timeout = Math.max(25000, ports * 5000);
+      const [stateOut, baseOut] = await Promise.all([
+        sshExec(olt, ['terminal length 0', ...stateCmds], timeout),
+        sshExec(olt, ['terminal length 0', ...baseCmds],  timeout),
+      ]);
+      if (process.env.OLT_DEBUG === '1') {
+        console.log('[OLT:ZTE] state output:\n', stateOut);
+        console.log('[OLT:ZTE] baseinfo output:\n', baseOut);
+      }
+
+      // Parsear SN desde baseinfo: gpon-onu_1/1/1:10   ZTE-F625  sn  SN:GPON007AAE50  ready
+      const snMap = {};
+      const snRe = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+\S+\s+\S+\s+SN:(\S+)/gi;
+      let ms;
+      while ((ms = snRe.exec(baseOut)) !== null) {
+        snMap[`gpon-onu_${ms[1]}:${ms[2]}`] = ms[3];
+      }
+
+      // Parsear estado desde state: 5 columnas — OnuIndex Admin OMCC O7 Phase
+      // gpon-onu_1/1/1:10   enable  enable  operation  working
       const onus = [];
-      // Formato ZTE C320: gpon-onu_1/1/1:1  ZTEGXXXXXX  enable  working  up  up
-      const re = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+(\S+)\s+\S+\s+(\S+)/gi;
+      const stateRe = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+\S+\s+\S+\s+\S+\s+(\S+)/gi;
       let m;
-      while ((m = re.exec(out)) !== null) {
-        const phase = m[4].toLowerCase();
+      while ((m = stateRe.exec(stateOut)) !== null) {
+        const id = `gpon-onu_${m[1]}:${m[2]}`;
+        const phase = m[3].toLowerCase();
         const status = phase === 'working' ? 'online' : 'offline';
-        onus.push({ id: `gpon-onu_${m[1]}:${m[2]}`, mac: m[3], status, port: m[1] });
+        onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
       }
       return onus;
     },
 
     getSignal: async (olt, onuId) => {
-      // onuId formato: gpon-onu_1/1/1:3
-      const match = onuId.match(/gpon-onu_(\d+\/\d+\/\d+):(\d+)/);
-      if (!match) return { rxPower: null, txPower: null };
-      const [, port, num] = match;
-      const out = await sshExec(olt, ['enable', 'terminal length 0', `show gpon onu optical-info gpon-olt_${port}`]);
+      // onuId formato: gpon-onu_1/1/1:10
+      // Comando correcto ZTE C320: show pon power attenuation gpon-onu_1/1/1:10
+      // Salida:
+      //  up    Rx :-29.013(dbm)   Tx:1.926(dbm)   30.939(dB)
+      //  down  Tx :6.545(dbm)     Rx:-26.576(dbm)  33.121(dB)
+      const out = await sshExec(olt, ['terminal length 0', `show pon power attenuation ${onuId}`]);
       if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] getSignal raw output:\n', out);
-      // Formato: "  1   -22.34   2.50   3.28   9.5   42.1"
-      const re = new RegExp(`^\\s*${num}\\s+([-\\d.]+)\\s+([-\\d.]+)`, 'm');
-      const sig = out.match(re);
+      const rx = (out.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
+      const tx = (out.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
       return {
-        rxPower: sig ? parseFloat(sig[1]) : null,
-        txPower: sig ? parseFloat(sig[2]) : null,
+        rxPower: rx ? parseFloat(rx) : null,
+        txPower: tx ? parseFloat(tx) : null,
       };
     },
 
