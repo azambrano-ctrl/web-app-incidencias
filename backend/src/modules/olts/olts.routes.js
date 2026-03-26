@@ -4,6 +4,7 @@ const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
 const svc = require('./olts.service');
 const oltSvc = require('../../services/olt-connect.service');
+const { getClientsBySerials } = require('../clients/clients.service');
 
 router.use(authenticate);
 
@@ -54,6 +55,14 @@ router.get('/:id/onus', async (req, res, next) => {
   try {
     const olt = await svc.getOlt(req.params.id);
     const onus = await oltSvc.listONUs(olt);
+    // Enriquecer con nombre de cliente por serial (mac = SN en ZTE)
+    const serials = onus.map(o => o.mac).filter(Boolean);
+    const clientMap = await getClientsBySerials(serials);
+    for (const onu of onus) {
+      const c = onu.mac ? clientMap[onu.mac] : null;
+      onu.description = c?.name || null;
+      onu.clientId = c?.id || null;
+    }
     res.json(onus);
   } catch (e) { next(e); }
 });

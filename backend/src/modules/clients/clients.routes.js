@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
 const svc = require('./clients.service');
+const strip = (val) => typeof val === 'string' ? val.replace(/<[^>]*>/g, '').trim() : val;
 
 router.use(authenticate);
 
@@ -32,6 +33,16 @@ router.patch('/:id', async (req, res, next) => {
     const id = parseInt(req.params.id);
     if (!id) return res.status(400).json({ error: 'ID inválido' });
     res.json(await svc.updateClient(id, req.body));
+  } catch (e) { next(e); }
+});
+
+// Vincular serial ONU a cliente: PATCH /api/v1/clients/:id/onu-serial
+router.patch('/:id/onu-serial', authorize('admin', 'supervisor'), async (req, res, next) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'ID inválido' });
+    const serial = strip(req.body.onu_serial || '');
+    res.json(await svc.linkOnuSerial(id, serial || null));
   } catch (e) { next(e); }
 });
 

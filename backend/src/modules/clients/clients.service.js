@@ -94,4 +94,35 @@ async function getStats() {
   return { total: parseInt(total.total), sectors };
 }
 
-module.exports = { importClients, searchClients, getStats, updateClient };
+// Vincular/desvincular serial ONU a un cliente
+async function linkOnuSerial(clientId, serial) {
+  const db = getDb();
+  // Desasignar serial si ya estaba en otro cliente
+  if (serial) await db.query(`UPDATE clients SET onu_serial=NULL WHERE onu_serial=$1 AND id!=$2`, [serial, clientId]);
+  const { rows } = await db.query(
+    `UPDATE clients SET onu_serial=$1 WHERE id=$2 RETURNING *`,
+    [serial || null, clientId]
+  );
+  if (!rows[0]) throw Object.assign(new Error('Cliente no encontrado'), { status: 404 });
+  return rows[0];
+}
+
+// Obtener mapa serial → nombre para enriquecer ONUs
+async function getClientsBySerials(serials) {
+  if (!serials || serials.length === 0) return {};
+  const db = getDb();
+  const placeholders = serials.map((_, i) => `$${i + 1}`).join(',');
+  const { rows } = await db.query(
+    `SELECT onu_serial, id, nombre1, apellido1, razon_social, celular1
+     FROM clients WHERE onu_serial IN (${placeholders})`,
+    serials
+  );
+  const map = {};
+  for (const r of rows) {
+    const name = r.razon_social || `${r.nombre1 || ''} ${r.apellido1 || ''}`.trim();
+    map[r.onu_serial] = { name, id: r.id, celular1: r.celular1 };
+  }
+  return map;
+}
+
+module.exports = { importClients, searchClients, getStats, updateClient, linkOnuSerial, getClientsBySerials };

@@ -14,6 +14,7 @@ const { runMigrations008 } = require('./src/db/migrations/008_external_id');
 const { runMigrations009 } = require('./src/db/migrations/009_routers');
 const { runMigrations010 } = require('./src/db/migrations/010_olts');
 const { runMigrations011 } = require('./src/db/migrations/011_olt_ports');
+const { runMigrations012 } = require('./src/db/migrations/012_client_onu_serial');
 const { runSeeds } = require('./src/db/seeds/001_admin');
 const { startReminderJob, setIo: setReminderIo } = require('./src/jobs/reminder.job');
 const { setIo: setIncidentsIo } = require('./src/modules/incidents/incidents.service');
@@ -46,6 +47,7 @@ async function main() {
   await runMigrations009();
   await runMigrations010();
   await runMigrations011();
+  await runMigrations012();
   await runSeeds();
 
   // 2b. Validar configuración de APIs externas (advertencia, no fatal)

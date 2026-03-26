@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU } from '../api/olts.api';
+import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial } from '../api/olts.api';
+import { searchClients } from '../api/clients.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import { toast } from 'react-hot-toast';
@@ -28,6 +29,10 @@ export default function OLTPage() {
   const [testing, setTesting] = useState(null);
   const [showProvision, setShowProvision] = useState(false);
   const [provForm, setProvForm] = useState(PROV_EMPTY);
+  const [linkOnu, setLinkOnu] = useState(null); // ONU a vincular
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientResults, setClientResults] = useState([]);
+  const [linking, setLinking] = useState(false);
 
   const { data: olts = [], isLoading } = useQuery({ queryKey: ['olts'], queryFn: getOlts });
 
@@ -81,6 +86,35 @@ export default function OLTPage() {
       toast[r.ok ? 'success' : 'error'](r.message);
     } catch { toast.error('Error de conexión'); }
     finally { setTesting(null); }
+  };
+
+  const handleClientSearch = async (q) => {
+    setClientSearch(q);
+    if (q.length < 2) { setClientResults([]); return; }
+    try { setClientResults(await searchClients(q)); } catch { setClientResults([]); }
+  };
+
+  const handleLink = async (clientId) => {
+    if (!linkOnu) return;
+    setLinking(true);
+    try {
+      await linkOnuSerial(clientId, linkOnu.mac);
+      qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] });
+      toast.success('ONU vinculada al cliente');
+      setLinkOnu(null); setClientSearch(''); setClientResults([]);
+    } catch { toast.error('Error al vincular'); }
+    finally { setLinking(false); }
+  };
+
+  const handleUnlink = async (onu) => {
+    if (!onu.clientId) return;
+    setLinking(true);
+    try {
+      await linkOnuSerial(onu.clientId, null);
+      qc.invalidateQueries({ queryKey: ['olt-onus', selectedOlt?.id] });
+      toast.success('Vínculo eliminado');
+    } catch { toast.error('Error al desvincular'); }
+    finally { setLinking(false); }
   };
 
   const handleSubmit = (e) => {
@@ -226,12 +260,27 @@ export default function OLTPage() {
                           </td>
                           <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.rxPower ?? null} /></td>
                           <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.txPower ?? null} /></td>
-                          <td style={{ fontSize: 12, padding: '10px 14px' }}>{onu.description || '—'}</td>
+                          <td style={{ fontSize: 12, padding: '10px 14px' }}>
+                            {onu.description
+                              ? <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{onu.description}</span>
+                              : <span style={{ color: '#94a3b8' }}>Sin vincular</span>}
+                          </td>
                           <td style={{ padding: '10px 14px' }}>
-                            <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', fontSize: 11 }}
-                              onClick={() => window.confirm(`¿Reiniciar ONU ${onu.id}?`) && rebootMut.mutate({ id: selectedOlt.id, onuId: onu.id })}>
-                              Reiniciar
-                            </button>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-sm" style={{ background: '#fef3c7', color: '#d97706', border: '1px solid #fcd34d', fontSize: 11 }}
+                                onClick={() => window.confirm(`¿Reiniciar ONU ${onu.id}?`) && rebootMut.mutate({ id: selectedOlt.id, onuId: onu.id })}>
+                                Reiniciar
+                              </button>
+                              {onu.description
+                                ? <button className="btn btn-sm" style={{ background: '#fee2e2', color: '#dc2626', border: '1px solid #fca5a5', fontSize: 11 }}
+                                    onClick={() => handleUnlink(onu)} disabled={linking}>
+                                    Desvincular
+                                  </button>
+                                : <button className="btn btn-sm" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: 11 }}
+                                    onClick={() => { setLinkOnu(onu); setClientSearch(''); setClientResults([]); }}>
+                                    Vincular
+                                  </button>}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -321,6 +370,49 @@ export default function OLTPage() {
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal vincular ONU a cliente */}
+          {linkOnu && (
+            <div className="modal-overlay" onClick={() => setLinkOnu(null)}>
+              <div className="modal modal-sm" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                  <h3>Vincular ONU a cliente</h3>
+                  <button className="modal-close" onClick={() => setLinkOnu(null)}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                    ONU: <strong style={{ fontFamily: 'monospace' }}>{linkOnu.id}</strong><br />
+                    SN: <strong style={{ fontFamily: 'monospace' }}>{linkOnu.mac}</strong>
+                  </p>
+                  <input
+                    className="form-input"
+                    placeholder="Buscar cliente por nombre, cédula o teléfono..."
+                    value={clientSearch}
+                    onChange={e => handleClientSearch(e.target.value)}
+                    autoFocus
+                  />
+                  {clientResults.length > 0 && (
+                    <div style={{ marginTop: 8, border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+                      {clientResults.map(c => (
+                        <button key={c.id}
+                          onClick={() => handleLink(c.id)}
+                          disabled={linking}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', background: 'white', border: 'none', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize: 13 }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#eff6ff'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+                          <strong>{c.razon_social || `${c.nombre1 || ''} ${c.apellido1 || ''}`.trim()}</strong>
+                          <span style={{ color: '#64748b', marginLeft: 8, fontSize: 12 }}>{c.identificacion} · {c.celular1}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {clientSearch.length >= 2 && clientResults.length === 0 && (
+                    <p style={{ color: '#94a3b8', fontSize: 12, marginTop: 8 }}>No se encontraron clientes</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
