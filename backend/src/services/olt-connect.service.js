@@ -93,25 +93,58 @@ const BRANDS = {
     },
 
     // Señales ópticas en sesión separada (llamar después de listONUs)
+    // Usa "show pon power onu-rx gpon-olt_F/S/P" por puerto — coincide con CLI real del ZTE
     getSignals: async (olt, onuIds) => {
       const online = onuIds.filter(Boolean);
       if (!online.length) return {};
-      const powerCmds = online.map(id => `show pon power attenuation ${id}`);
-      const powerTimeout = Math.max(30000, online.length * 3000);
-      let powerOut = '';
+
+      // Extraer puertos únicos desde los IDs: gpon-onu_1/1/4:10 → 1/1/4
+      const portsSet = new Set();
+      for (const id of online) {
+        const m = id.match(/gpon-onu_(\d+\/\d+\/\d+):/i);
+        if (m) portsSet.add(m[1]);
+      }
+      const ports = [...portsSet];
+
+      const rxCmds = ports.map(p => `show pon power onu-rx gpon-olt_${p}`);
+      const txCmds = ports.map(p => `show pon power onu-tx gpon-olt_${p}`);
+      const powerTimeout = Math.max(30000, ports.length * 6000);
+
+      let rxOut = '', txOut = '';
       try {
-        powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], powerTimeout);
+        const combined = await sshExec(olt, ['terminal length 0', ...rxCmds, ...txCmds], powerTimeout);
+        rxOut = combined;
+        txOut = combined;
       } catch (e) {
         console.error('[OLT:ZTE] Error señal óptica:', e.message);
       }
+
+      if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] signal output:\n', rxOut);
+
+      // Parsear Rx: "gpon-onu_1/1/1:10  -26.384(dbm)" o "N/A"
+      const rxMap = {};
+      const rxRe = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+([-\d.]+)\(dbm\)/gi;
+      let m;
+      while ((m = rxRe.exec(rxOut)) !== null) {
+        rxMap[`gpon-onu_${m[1]}:${m[2]}`] = parseFloat(m[3]);
+      }
+
+      // Parsear Tx: mismo formato
+      const txMap = {};
+      const txRe = /gpon-onu_(\d+\/\d+\/\d+):(\d+)\s+([-\d.]+)\(dbm\)/gi;
+      // Buscar solo en el bloque después de los comandos onu-tx
+      const txSection = txOut.split(/show pon power onu-tx/i).slice(1).join('');
+      let t;
+      while ((t = txRe.exec(txSection)) !== null) {
+        txMap[`gpon-onu_${t[1]}:${t[2]}`] = parseFloat(t[3]);
+      }
+
       const result = {};
       for (const id of online) {
-        const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|#|$)`, 'i');
-        const block = (powerOut.match(blockRe) || [''])[0];
-        const rx = (block.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
-        const tx = (block.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
-        result[id] = { rxPower: rx ? parseFloat(rx) : null, txPower: tx ? parseFloat(tx) : null };
+        result[id] = {
+          rxPower: rxMap[id] ?? null,
+          txPower: txMap[id] ?? null,
+        };
       }
       return result;
     },
