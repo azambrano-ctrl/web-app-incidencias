@@ -187,11 +187,11 @@ const BRANDS = {
     },
 
     deleteONU: async (olt, onuId) => {
-      // onuId: gpon-onu_1/1/2:24 → interface gpon-olt_1/1/2, no onu 24
+      // onuId: gpon-onu_1/1/1:87 → configure terminal / int gpon-olt_1/1/1 / no onu 87
       const m = onuId.match(/gpon-onu_(\d+\/\d+\/\d+):(\d+)/i);
       if (!m) throw new Error(`ONU ID inválido: ${onuId}`);
       const [, port, index] = m;
-      const cmds = ['enable', 'config', `interface gpon-olt_${port}`, `no onu ${index}`, 'quit', 'quit'];
+      const cmds = ['configure terminal', `interface gpon-olt_${port}`, `no onu ${index}`, 'end'];
       await sshExec(olt, cmds, 20000);
       return { ok: true };
     },
@@ -199,14 +199,14 @@ const BRANDS = {
     provision: async (olt, { port, sn, profile, vlan, nombre, description }) => {
       const desc = nombre || description || sn;
       const cmds = [
-        'enable', 'config',
+        'configure terminal',
         `interface gpon-olt_${port}`,
         `onu ${sn.slice(-2)} type AUTO sn-auth ${sn} omci ont-lineprofile-id ${profile} ont-srvprofile-id ${profile}`,
         `onu-id ${sn.slice(-2)} description ${desc}`,
-        'quit',
+        'exit',
         `interface gpon-onu_${port}:${sn.slice(-2)}`,
         `service-port 1 vport 1 user-vlan ${vlan} vlan ${vlan}`,
-        'quit',
+        'end',
       ];
       await sshExec(olt, cmds);
       return { ok: true };
