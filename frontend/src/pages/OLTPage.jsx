@@ -68,11 +68,18 @@ export default function OLTPage() {
     }
     const newOnus = onus.filter(o => !knownOnuIds.current.has(o.id));
     for (const onu of newOnus) {
-      toast(`Nueva ONU detectada: ${onu.id} (${onu.mac || 'SN desconocido'})`, {
-        icon: '📡',
-        duration: 8000,
-        style: { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', fontWeight: 600 },
-      });
+      toast((t) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>📡 Nueva ONU detectada</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{onu.id}</span>
+          <span style={{ fontSize: 12, color: '#475569' }}>SN: {onu.mac || 'desconocido'}</span>
+          <button
+            onClick={() => { toast.dismiss(t.id); openProvision(onu); }}
+            style={{ marginTop: 4, padding: '4px 10px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 5, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            Provisionar
+          </button>
+        </div>
+      ), { duration: 12000, style: { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' } });
     }
     knownOnuIds.current = currentIds;
   }, [onus]);
@@ -153,6 +160,19 @@ export default function OLTPage() {
       toast.success('Vínculo eliminado');
     } catch { toast.error('Error al desvincular'); }
     finally { setLinking(false); }
+  };
+
+  // Abrir modal de provisionar con datos pre-llenados desde una ONU
+  const openProvision = (onu = null) => {
+    if (onu) {
+      // Extraer puerto: gpon-onu_1/1/4:128 → "1/1/4"
+      const match = onu.id?.match(/gpon-onu_(\d+\/\d+\/\d+):/i);
+      const port = match ? match[1] : '';
+      setProvForm({ port, sn: onu.mac || '', profile: '1', vlan: '100', description: onu.description || '' });
+    } else {
+      setProvForm(PROV_EMPTY);
+    }
+    setShowProvision(true);
   };
 
   const handleSubmit = (e) => {
@@ -245,7 +265,7 @@ export default function OLTPage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-sm btn-primary" onClick={() => setShowProvision(true)}>+ Provisionar ONU</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => openProvision()}>+ Provisionar ONU</button>
                   <button className="btn btn-sm btn-secondary" onClick={() => qc.invalidateQueries({ queryKey: ['olt-onus'] })}>Actualizar</button>
                 </div>
               </div>
@@ -337,10 +357,16 @@ export default function OLTPage() {
                                     onClick={() => handleUnlink(onu)} disabled={linking}>
                                     Desvincular
                                   </button>
-                                : <button className="btn btn-sm" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: 11 }}
-                                    onClick={() => { setLinkOnu(onu); setClientSearch(''); setClientResults([]); }}>
-                                    Vincular
-                                  </button>}
+                                : <>
+                                    <button className="btn btn-sm" style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: 11 }}
+                                      onClick={() => { setLinkOnu(onu); setClientSearch(''); setClientResults([]); }}>
+                                      Vincular
+                                    </button>
+                                    <button className="btn btn-sm" style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #86efac', fontSize: 11 }}
+                                      onClick={() => openProvision(onu)}>
+                                      Provisionar
+                                    </button>
+                                  </>}
                             </div>
                           </td>
                         </tr>
