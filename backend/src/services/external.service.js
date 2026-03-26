@@ -19,9 +19,10 @@ function request(baseUrl, method, path, body, token) {
     const lib = url.protocol === 'https:' ? https : http;
     const options = {
       hostname: url.hostname,
-      port: url.port,
-      path: url.pathname,
+      port: url.port || undefined,
+      path: url.pathname + url.search,
       method,
+      rejectUnauthorized: false, // permitir certificados auto-firmados en sistemas internos
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -85,4 +86,16 @@ async function createExternalIncident(incident) {
 // Resetear token en memoria al cambiar credenciales
 function resetToken() { _token = null; _tokenExpiry = 0; }
 
-module.exports = { createExternalIncident, resetToken };
+// Probar conexión con credenciales dadas (sin usar caché)
+async function testConnection({ baseUrl, username, password }) {
+  if (!baseUrl || !username || !password) throw new Error('Faltan datos de conexión');
+  const res = await request(baseUrl, 'POST', '/api/v1/users/sign/in', { username, password });
+  const token = res.data?.data?.access;
+  if (!token) {
+    const msg = res.data?.message || res.data?.detail || JSON.stringify(res.data);
+    throw new Error(`Autenticación fallida (${res.status}): ${msg}`);
+  }
+  return { ok: true, status: res.status };
+}
+
+module.exports = { createExternalIncident, resetToken, testConnection };

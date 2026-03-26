@@ -12,6 +12,9 @@ export const testEmail = (to, config) =>
 export const testWhatsApp = (to, config) =>
   api.post('/settings/test-whatsapp', { to, config }).then(r => r.data);
 
+export const testExtApi = (config) =>
+  api.post('/settings/test-ext', { config }).then(r => r.data);
+
 export const getVapidKey = () =>
   api.get('/settings/push/vapid-key').then(r => r.data);
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import { importClients, getClientStats } from '../api/clients.api';
 import { getUsers, createUser, updateUser, deactivateUser, resetPassword } from '../api/users.api';
-import { getSettings, saveSettings, testEmail, testWhatsApp, getVapidKey, pushSubscribe, pushUnsubscribe } from '../api/settings.api';
+import { getSettings, saveSettings, testEmail, testWhatsApp, testExtApi, getVapidKey, pushSubscribe, pushUnsubscribe } from '../api/settings.api';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate } from '../api/checklist.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
@@ -43,6 +43,7 @@ export default function ConfigPage() {
   const [pushCfg, setPushCfg] = useState({ push_enabled: '0' });
   const [extCfg, setExtCfg] = useState({ ext_api_enabled: '0', ext_api_url: '', ext_api_user: '', ext_api_pass: '' });
   const [savingExt, setSavingExt] = useState(false);
+  const [testingExt, setTestingExt] = useState(false);
   const [testEmailTo, setTestEmailTo] = useState('');
   const [testWaTo, setTestWaTo] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
@@ -195,6 +196,17 @@ export default function ConfigPage() {
       toast.success('API externa guardada');
     } catch { toast.error('Error al guardar'); }
     finally { setSavingExt(false); }
+  };
+
+  // ── Probar conexión API externa ──
+  const handleTestExt = async () => {
+    setTestingExt(true);
+    try {
+      await testExtApi(extCfg);
+      toast.success('Conexión exitosa con la API externa');
+    } catch (err) {
+      toast.error(err.response?.data?.error || err.message || 'Error al conectar');
+    } finally { setTestingExt(false); }
   };
 
   // ── Guardar ajustes de notificaciones ──
@@ -787,6 +799,9 @@ export default function ConfigPage() {
               <div className="notif-actions" style={{ marginTop: 16 }}>
                 <button className="btn btn-primary" onClick={handleSaveExt} disabled={savingExt}>
                   {savingExt ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button className="btn btn-secondary" onClick={handleTestExt} disabled={testingExt || !extCfg.ext_api_url}>
+                  {testingExt ? 'Probando...' : 'Probar conexión'}
                 </button>
               </div>
             </div>

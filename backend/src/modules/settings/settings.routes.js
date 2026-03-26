@@ -2,11 +2,11 @@ const router = require('express').Router();
 const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
 const { audit } = require('../../middleware/audit');
-const { getSettings, setSettings } = require('./settings.service');
+const { getSettings, getSetting, setSettings } = require('./settings.service');
 const { sendEmail } = require('../../services/email.service');
 const { sendWhatsApp } = require('../../services/whatsapp.service');
 const { ensureVapidKeys, subscribe, unsubscribe } = require('../../services/push.service');
-const { resetToken } = require('../../services/external.service');
+const { resetToken, testConnection } = require('../../services/external.service');
 
 const SETTING_KEYS = [
   'email_enabled', 'email_host', 'email_port', 'email_secure',
@@ -58,6 +58,19 @@ router.post('/test-email', authenticate, authorize('admin'), async (req, res) =>
     await sendEmail(to, '✅ Prueba de Email — IncidenciasISP',
       `<h2 style="color:#2563eb">Email configurado correctamente</h2>
        <p>Tu sistema de notificaciones por email está funcionando.</p>`, cfg);
+    res.json({ ok: true });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.post('/test-ext', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { config } = req.body;
+    const baseUrl = config?.ext_api_url || await getSetting('ext_api_url');
+    const username = config?.ext_api_user || await getSetting('ext_api_user');
+    // La contraseña puede venir del frontend o de la BD (si el frontend envía '***configured***' usamos la de la BD)
+    let password = config?.ext_api_pass;
+    if (!password || password === '***configured***') password = await getSetting('ext_api_pass');
+    await testConnection({ baseUrl, username, password });
     res.json({ ok: true });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
