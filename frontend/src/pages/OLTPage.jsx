@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial } from '../api/olts.api';
 import { searchClients } from '../api/clients.api';
@@ -43,6 +43,30 @@ export default function OLTPage() {
     refetchInterval: 30000,
     retry: false,
   });
+
+  // Detectar nuevas ONUs en cada refresco
+  const knownOnuIds = useRef(null);
+  useEffect(() => {
+    if (!onus.length) return;
+    const currentIds = new Set(onus.map(o => o.id));
+    if (knownOnuIds.current === null) {
+      // Primera carga — solo guardar, no notificar
+      knownOnuIds.current = currentIds;
+      return;
+    }
+    const newOnus = onus.filter(o => !knownOnuIds.current.has(o.id));
+    for (const onu of newOnus) {
+      toast(`Nueva ONU detectada: ${onu.id} (${onu.mac || 'SN desconocido'})`, {
+        icon: '📡',
+        duration: 8000,
+        style: { background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', fontWeight: 600 },
+      });
+    }
+    knownOnuIds.current = currentIds;
+  }, [onus]);
+
+  // Resetear seguimiento al cambiar de OLT
+  useEffect(() => { knownOnuIds.current = null; }, [selectedOlt?.id]);
 
   const filteredOnus = useMemo(() => {
     const q = search.toLowerCase();
