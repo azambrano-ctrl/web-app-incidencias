@@ -319,8 +319,8 @@ export default function OLTPage() {
                               {onu.status === 'online' ? 'Online' : 'Offline'}
                             </span>
                           </td>
-                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={signals[onu.id]?.rxPower ?? null} /></td>
-                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={signals[onu.id]?.txPower ?? null} /></td>
+                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.status === 'online' ? (signals[onu.id]?.rxPower ?? null) : null} /></td>
+                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.status === 'online' ? (signals[onu.id]?.txPower ?? null) : null} /></td>
                           <td style={{ fontSize: 12, padding: '10px 14px' }}>
                             {onu.description
                               ? <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{onu.description}</span>
