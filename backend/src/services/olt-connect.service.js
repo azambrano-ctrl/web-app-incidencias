@@ -88,33 +88,31 @@ const BRANDS = {
         onus.push({ id, mac: snMap[id] || null, status, port: m[1] });
       }
 
-      // Obtener señal óptica solo para ONUs online (offline siempre devuelve "no signal")
-      const onlineOnus = onus.filter(o => o.status === 'online');
-      if (onlineOnus.length > 0) {
-        // Esperar un momento para que el ZTE libere la sesión anterior
-        await new Promise(r => setTimeout(r, 2000));
-        const powerCmds = onlineOnus.map(o => `show pon power attenuation ${o.id}`);
-        const powerTimeout = Math.max(30000, onlineOnus.length * 3000);
-        let powerOut = '';
-        try {
-          powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], powerTimeout);
-        } catch (e) {
-          console.error('[OLT:ZTE] Error al obtener señal óptica:', e.message);
-        }
-        if (process.env.OLT_DEBUG === '1') console.log('[OLT:ZTE] power output:\n', powerOut);
-
-        for (const onu of onlineOnus) {
-          const escaped = onu.id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|#|$)`, 'i');
-          const block = (powerOut.match(blockRe) || [''])[0];
-          const rx = (block.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
-          const tx = (block.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
-          onu.rxPower = rx ? parseFloat(rx) : null;
-          onu.txPower = tx ? parseFloat(tx) : null;
-        }
-      }
-
       return onus;
+    },
+
+    // Señales ópticas en sesión separada (llamar después de listONUs)
+    getSignals: async (olt, onuIds) => {
+      const online = onuIds.filter(Boolean);
+      if (!online.length) return {};
+      const powerCmds = online.map(id => `show pon power attenuation ${id}`);
+      const powerTimeout = Math.max(30000, online.length * 3000);
+      let powerOut = '';
+      try {
+        powerOut = await sshExec(olt, ['terminal length 0', ...powerCmds], powerTimeout);
+      } catch (e) {
+        console.error('[OLT:ZTE] Error señal óptica:', e.message);
+      }
+      const result = {};
+      for (const id of online) {
+        const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const blockRe = new RegExp(`show pon power attenuation ${escaped}[\\s\\S]*?(?=show pon power|#|$)`, 'i');
+        const block = (powerOut.match(blockRe) || [''])[0];
+        const rx = (block.match(/up\s+Rx\s*:\s*([-\d.]+)\s*\(dbm\)/i) || [])[1];
+        const tx = (block.match(/up\s+.*?Tx\s*:([-\d.]+)\s*\(dbm\)/i) || [])[1];
+        result[id] = { rxPower: rx ? parseFloat(rx) : null, txPower: tx ? parseFloat(tx) : null };
+      }
+      return result;
     },
 
     getSignal: async (olt, onuId) => {
@@ -324,4 +322,16 @@ async function provisionONU(olt, data) {
   return getBrand(olt).provision(olt, data);
 }
 
-module.exports = { testConnection, listONUs, getSignal, rebootONU, provisionONU };
+async function getSignals(olt, onuIds) {
+  const b = BRANDS[olt.brand];
+  if (b?.getSignals) return b.getSignals(olt, onuIds);
+  // Fallback para marcas sin getSignals: consultar una por una
+  const result = {};
+  for (const id of onuIds) {
+    try { result[id] = await b.getSignal(olt, id); }
+    catch { result[id] = { rxPower: null, txPower: null }; }
+  }
+  return result;
+}
+
+module.exports = { testConnection, listONUs, getSignal, getSignals, rebootONU, provisionONU };

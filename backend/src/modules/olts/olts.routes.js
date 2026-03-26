@@ -4,6 +4,7 @@ const { authenticate } = require('../../middleware/auth');
 const { authorize } = require('../../middleware/authorize');
 const svc = require('./olts.service');
 const oltSvc = require('../../services/olt-connect.service');
+
 const { getClientsBySerials } = require('../clients/clients.service');
 
 router.use(authenticate);
@@ -64,6 +65,15 @@ router.get('/:id/onus', async (req, res, next) => {
       onu.clientId = c?.id || null;
     }
     res.json(onus);
+  } catch (e) { next(e); }
+});
+
+// Señales para múltiples ONUs (llamada separada post-carga)
+router.post('/:id/onus/signals', async (req, res, next) => {
+  try {
+    const olt = await svc.getOlt(req.params.id);
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    res.json(await oltSvc.getSignals(olt, ids));
   } catch (e) { next(e); }
 });
 

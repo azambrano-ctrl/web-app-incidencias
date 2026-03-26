@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial } from '../api/olts.api';
+import { getOlts, createOlt, updateOlt, deleteOlt, testOlt, getONUs, rebootONU, provisionONU, linkOnuSerial, getONUSignals } from '../api/olts.api';
 import { searchClients } from '../api/clients.api';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
@@ -42,6 +42,17 @@ export default function OLTPage() {
     enabled: !!selectedOlt,
     refetchInterval: 30000,
     retry: false,
+  });
+
+  // Segunda fase: señales ópticas (carga tras obtener la lista)
+  const onlineIds = useMemo(() => onus.filter(o => o.status === 'online').map(o => o.id), [onus]);
+  const { data: signals = {} } = useQuery({
+    queryKey: ['olt-signals', selectedOlt?.id, onlineIds.join(',')],
+    queryFn: () => getONUSignals(selectedOlt.id, onlineIds),
+    enabled: !!selectedOlt && onlineIds.length > 0,
+    refetchInterval: 60000,
+    retry: false,
+    staleTime: 55000,
   });
 
   // Detectar nuevas ONUs en cada refresco
@@ -282,8 +293,8 @@ export default function OLTPage() {
                               {onu.status === 'online' ? 'Online' : 'Offline'}
                             </span>
                           </td>
-                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.rxPower ?? null} /></td>
-                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={onu.txPower ?? null} /></td>
+                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={signals[onu.id]?.rxPower ?? null} /></td>
+                          <td style={{ padding: '10px 14px' }}><SignalBar dbm={signals[onu.id]?.txPower ?? null} /></td>
                           <td style={{ fontSize: 12, padding: '10px 14px' }}>
                             {onu.description
                               ? <span style={{ color: '#1d4ed8', fontWeight: 600 }}>{onu.description}</span>
